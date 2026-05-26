@@ -1,6 +1,6 @@
 # Playwright Fixture 자동 주입 패턴
 
-Helper 6종을 매 테스트마다 수동 초기화하지 않고, Playwright의 `test.extend`로 **fixture 자동 주입**한다. 테스트는 `async ({ form, dialog, toast }) => {...}` 형태로 Helper를 바로 받아 쓴다.
+Helper 9종을 매 테스트마다 수동 초기화하지 않고, Playwright의 `test.extend`로 **fixture 자동 주입**한다. 테스트는 `async ({ form, dialog, toast }) => {...}` 형태로 Helper를 바로 받아 쓴다.
 
 ## 핵심 fixtures.ts
 
@@ -218,6 +218,8 @@ sequence는 여러 flow의 결합이므로 **단일 flow로 보기 어려운 경
 ---
 
 ## TypeScript 타입 확장 패턴
+
+> v0.2.0에서 `CheckboxHelper`, `RadioGroupHelper`, `FileUploadHelper` Tier A 3종이 추가되어 fixture는 총 9개 Helper를 자동 주입한다. 아래 diff는 *새 Helper를 추가할 때의 패턴*을 보여주는 예시.
 
 fixture에 새 Helper를 추가할 때:
 

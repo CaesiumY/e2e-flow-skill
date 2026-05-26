@@ -73,6 +73,9 @@ pnpm exec playwright install chromium
 | `helpers/TableHelper.ts.tmpl` | `e2e/helpers/TableHelper.ts` |
 | `helpers/NavigationHelper.ts.tmpl` | `e2e/helpers/NavigationHelper.ts` |
 | `helpers/ToastHelper.ts.tmpl` | `e2e/helpers/ToastHelper.ts` |
+| `helpers/CheckboxHelper.ts.tmpl` | `e2e/helpers/CheckboxHelper.ts` |
+| `helpers/RadioGroupHelper.ts.tmpl` | `e2e/helpers/RadioGroupHelper.ts` |
+| `helpers/FileUploadHelper.ts.tmpl` | `e2e/helpers/FileUploadHelper.ts` |
 | `spec.example.ts.tmpl` | `e2e/tests/example/specs/landing.spec.ts` |
 | `flows.example.ts.tmpl` | `e2e/tests/example/flows/landing-flows.ts` |
 | (빈 디렉터리) | `e2e/shared/sequences/.gitkeep` |
@@ -99,6 +102,9 @@ pnpm exec playwright install chromium
 - TableHelper: getRowByText, clickRowAction, expectRowCount, expectRowExists
 - NavigationHelper: clickTab, expectUrlMatches, expectActiveTab, expectBreadcrumb
 - ToastHelper: expectSuccess, expectError, waitForDismiss
+- CheckboxHelper: check, uncheck, toggle, expectChecked, checkMultiple
+- RadioGroupHelper: selectByLabel, expectSelected
+- FileUploadHelper: selectFiles, expectUploadedFile, expectFileCount, removeFile
 
 ## Selector 우선순위
 1순위: getByRole, 2순위: getByLabel/getByPlaceholder, 3순위: [data-slot=...]
@@ -165,7 +171,7 @@ pnpm exec playwright test --list
 
 생성된 파일:
 - playwright.config.ts
-- e2e/helpers/ (6개 Helper)
+- e2e/helpers/ (9개 Helper)
 - e2e/fixtures.ts
 - e2e/mocks/apiMockHandlers.ts
 - e2e/tests/example/ (예시 spec/flow 1쌍)

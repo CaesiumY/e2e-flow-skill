@@ -7,6 +7,9 @@ import { SelectHelper } from './helpers/SelectHelper';
 import { TableHelper } from './helpers/TableHelper';
 import { NavigationHelper } from './helpers/NavigationHelper';
 import { ToastHelper } from './helpers/ToastHelper';
+import { CheckboxHelper } from './helpers/CheckboxHelper';
+import { RadioGroupHelper } from './helpers/RadioGroupHelper';
+import { FileUploadHelper } from './helpers/FileUploadHelper';
 import { apiMockHandlers, type MockHandler } from './mocks/apiMockHandlers';
 
 interface Helpers {
@@ -16,6 +19,9 @@ interface Helpers {
   table: TableHelper;
   navigation: NavigationHelper;
   toast: ToastHelper;
+  checkbox: CheckboxHelper;
+  radioGroup: RadioGroupHelper;
+  fileUpload: FileUploadHelper;
 }
 
 interface MockFixture {
@@ -30,6 +36,9 @@ export const test = base.extend<Helpers & MockFixture>({
   table: async ({ page }, use) => use(new TableHelper(page)),
   navigation: async ({ page }, use) => use(new NavigationHelper(page)),
   toast: async ({ page }, use) => use(new ToastHelper(page)),
+  checkbox: async ({ page }, use) => use(new CheckboxHelper(page)),
+  radioGroup: async ({ page }, use) => use(new RadioGroupHelper(page)),
+  fileUpload: async ({ page }, use) => use(new FileUploadHelper(page)),
 
   setMocks: async ({ page }, use) => {
     await use(async (handlers) => {

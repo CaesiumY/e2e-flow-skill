@@ -93,6 +93,12 @@
 | 성공 토스트 | `toast.expectSuccess()` |
 | 탭 전환 | `navigation.clickTab('탭이름')` |
 | 행 액션 | `table.clickRowAction('행 식별 텍스트', '액션 레이블')` |
+| 체크박스 체크 / 동의 | `checkbox.check('레이블')` |
+| 체크박스 해제 | `checkbox.uncheck('레이블')` |
+| 여러 체크박스 일괄 | `checkbox.checkMultiple(['A','B','C'])` |
+| 라디오 옵션 선택 | `radioGroup.selectByLabel('그룹명', '옵션명')` |
+| 파일 첨부 | `fileUpload.selectFiles('레이블', [path.join(__dirname, 'fixtures/x.png')])` |
+| 첨부 파일 제거 | `fileUpload.removeFile('파일명')` |
 
 ### 안전 가드 (절대 위반 금지)
 

@@ -1,6 +1,6 @@
-# Helper 6종 완성 코드
+# Helper 9종 완성 코드
 
-디자인 시스템 컴포넌트와 1:1 매핑되는 Helper 6개. Phase 1에서 `assets/templates/helpers/*.tmpl` 로부터 프로젝트의 `e2e/helpers/` 에 복사·치환된다.
+디자인 시스템 컴포넌트와 1:1 매핑되는 Helper 9개. Phase 1에서 `assets/templates/helpers/*.tmpl` 로부터 프로젝트의 `e2e/helpers/` 에 복사·치환된다.
 
 각 Helper는:
 - **자연어에 가까운 메서드명** (`fillFields`, `clickConfirm`, `expectSuccess` 등)
@@ -254,9 +254,134 @@ export class ToastHelper {
 
 ---
 
+## CheckboxHelper
+
+체크박스·토글의 체크/해제/검증. `setChecked()` 기반이라 멱등 처리.
+
+```ts
+// e2e/helpers/CheckboxHelper.ts
+import { expect, type Page, type Locator } from '@playwright/test';
+
+export class CheckboxHelper {
+  constructor(private readonly page: Page) {}
+
+  /** 체크 — setChecked(true)로 멱등 처리. */
+  async check(label: string | RegExp): Promise<void> {
+    await this.locate(label).setChecked(true);
+  }
+
+  /** 체크 해제 — setChecked(false)로 멱등 처리. */
+  async uncheck(label: string | RegExp): Promise<void> {
+    await this.locate(label).setChecked(false);
+  }
+
+  /** 현재 상태 반전 ("X 토글" 자연어). */
+  async toggle(label: string | RegExp): Promise<void> {
+    await this.locate(label).click();
+  }
+
+  /** 체크 상태 검증. 기본값 true. */
+  async expectChecked(label: string | RegExp, checked = true): Promise<void> {
+    const locator = this.locate(label);
+    if (checked) await expect(locator).toBeChecked();
+    else await expect(locator).not.toBeChecked();
+  }
+
+  /** 여러 항목 일괄 체크 (순차 setChecked). */
+  async checkMultiple(labels: string[]): Promise<void> {
+    for (const label of labels) {
+      await this.locate(label).setChecked(true);
+    }
+  }
+
+  /** ARIA role=checkbox 기반 매칭. native input과 button[role=checkbox] 모두 지원. */
+  private locate(label: string | RegExp): Locator {
+    return this.page.getByRole('checkbox', { name: label });
+  }
+}
+```
+
+---
+
+## RadioGroupHelper
+
+라디오 그룹의 옵션 선택과 검증. `<fieldset><legend>` 또는 `role="radiogroup" aria-label`로 그룹이 노출됨을 전제.
+
+```ts
+// e2e/helpers/RadioGroupHelper.ts
+import { expect, type Page } from '@playwright/test';
+
+export class RadioGroupHelper {
+  constructor(private readonly page: Page) {}
+
+  /** 그룹 안에서 옵션 선택. "결제 방법으로 신용카드 선택" 자연어에 매핑. */
+  async selectByLabel(groupLabel: string, optionLabel: string | RegExp): Promise<void> {
+    const group = this.page.getByRole('radiogroup', { name: groupLabel });
+    await expect(group).toBeVisible();
+    await group.getByRole('radio', { name: optionLabel }).check();
+  }
+
+  /** 현재 선택된 옵션 검증. */
+  async expectSelected(groupLabel: string, expectedOption: string | RegExp): Promise<void> {
+    const group = this.page.getByRole('radiogroup', { name: groupLabel });
+    await expect(group.getByRole('radio', { name: expectedOption })).toBeChecked();
+  }
+}
+```
+
+---
+
+## FileUploadHelper
+
+`<input type="file">` 또는 디자인 시스템 업로더의 파일 첨부·검증·제거. `setInputFiles`는 hidden input에도 동작.
+
+```ts
+// e2e/helpers/FileUploadHelper.ts
+import { expect, type Page } from '@playwright/test';
+
+export class FileUploadHelper {
+  constructor(private readonly page: Page) {}
+
+  /** label로 식별된 파일 입력에 파일 첨부. filePaths는 절대 경로 권장. */
+  async selectFiles(label: string, filePaths: string[]): Promise<void> {
+    await this.page.getByLabel(label).setInputFiles(filePaths);
+  }
+
+  /** 업로드 후 표시되는 파일명 검증. */
+  async expectUploadedFile(name: string | RegExp): Promise<void> {
+    await expect(this.page.getByText(name)).toBeVisible();
+  }
+
+  /** 업로드된 파일 개수 검증. role=listitem 마크업 가정. */
+  async expectFileCount(count: number): Promise<void> {
+    await expect(this.page.getByRole('listitem').filter({
+      hasText: /\.(png|jpe?g|pdf|docx?|xlsx?|csv|zip|gif|webp)$/i,
+    })).toHaveCount(count);
+  }
+
+  /** 특정 파일의 삭제/제거 버튼 클릭. */
+  async removeFile(name: string | RegExp): Promise<void> {
+    const fileRow = this.page.getByRole('listitem').filter({ hasText: name });
+    await fileRow.getByRole('button', { name: /삭제|제거|remove|delete/i }).click();
+  }
+}
+```
+
+사용 예 — fixture로 받아 자연어에 가까운 흐름:
+```ts
+test('계약 신분증 첨부', async ({ page, fileUpload, toast }) => {
+  await page.goto('/contracts/123/identity');
+  await fileUpload.selectFiles('신분증', [path.join(__dirname, 'fixtures/id-card.png')]);
+  await fileUpload.expectUploadedFile('id-card.png');
+  await toast.expectSuccess();
+});
+```
+
+---
+
 ## Helper 확장 원칙
 
-- **새 디자인 시스템 컴포넌트가 추가되면 Helper도 함께 추가**한다 (`FileUploadHelper`, `DatePickerHelper` 등).
+- **새 디자인 시스템 컴포넌트가 추가되면 Helper도 함께 추가**한다 (예: `DatePickerHelper`, `PaginationHelper`, `SearchHelper` — Tier B 후보). v0.2.0에서 `CheckboxHelper`, `RadioGroupHelper`, `FileUploadHelper` Tier A 3종이 추가됨.
 - 메서드명은 **자연어에 가깝게** — `clickConfirm`, `expectSuccess`처럼 동사+의미.
 - Helper 내부 selector는 항상 1·2순위(`getByRole`, `getByLabel`)를 우선한다. 3순위(`data-slot`)는 1·2순위로 불가능할 때만.
 - **선언적 단언**을 권장 (`expect(...).toBeVisible()`)하고, 명령형 대기(`waitForSelector`)는 가급적 피한다.
