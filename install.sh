@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # e2e-flow-skill installer (Linux / macOS / WSL / Git Bash)
 #
-# Installs the e2e-flow Claude Code skill. This is a Claude Code-specific
-# workflow skill — it does not provide adapters for other AI tools.
+# Installs the e2e-flow skill. The automated 4-phase pipeline (subagent
+# dispatch + tool calls) is verified on Claude Code. The skill content inside
+# skills/e2e-flow/ (helpers, selector rules, templates, CI workflow) is
+# reusable in any AI coding agent or as plain reference material.
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/CaesiumY/e2e-flow-skill/main/install.sh | bash
@@ -10,9 +12,9 @@
 #   bash install.sh --ref=v1.2.3              # pin to a tag/branch (default: main)
 #   bash install.sh --skill-dir=/custom/path  # override install destination
 #
-# The skill is trigger-based: Claude Code invokes it automatically when your
-# prompt matches the description (e.g. "Playwright 셋업", "E2E 테스트
-# 추가", "테스트 깨졌어 고쳐줘"). No CLAUDE.md merge needed.
+# The skill is trigger-based: the host AI tool invokes it automatically when
+# your prompt matches the SKILL.md description (e.g. "Playwright 셋업",
+# "E2E 테스트 추가", "테스트 깨졌어 고쳐줘"). No CLAUDE.md merge needed.
 
 set -euo pipefail
 

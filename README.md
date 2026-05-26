@@ -1,6 +1,6 @@
 # e2e-flow-skill
 
-> QA 인력이 없는 프론트엔드 팀에서, 한 마디 자연어로 Playwright E2E 테스트를 셋업·생성·자가복구·확장하는 Claude Code 스킬.
+> QA 인력이 없는 프론트엔드 팀에서, 한 마디 자연어로 Playwright E2E 테스트를 셋업·생성·자가복구·확장하는 스킬.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Skill](https://img.shields.io/badge/skill-e2e--flow-blue)](./skills/e2e-flow/SKILL.md)
@@ -24,11 +24,13 @@ curl -fsSL https://raw.githubusercontent.com/CaesiumY/e2e-flow-skill/main/instal
 irm https://raw.githubusercontent.com/CaesiumY/e2e-flow-skill/main/install.ps1 | iex
 ```
 
-**Claude Code skills CLI** (있는 환경에서):
+**`skills` CLI** (벤더 중립 스킬 매니저, npx로 즉시 실행):
 
 ```bash
 npx skills add CaesiumY/e2e-flow-skill
 ```
+
+> `skills` 패키지는 Claude Code, Cursor, Codex 등 여러 AI 도구의 스킬 디렉터리를 관리하는 npm CLI입니다. 본 스킬 자체는 Claude Code의 서브에이전트·도구 호출에 의존하므로 *실행*은 Claude Code에서만 가능합니다. (다른 도구에서의 어댑터 PR 환영)
 
 ### 설치 옵션
 
@@ -48,13 +50,13 @@ curl -fsSL https://raw.githubusercontent.com/CaesiumY/e2e-flow-skill/main/instal
 iex "& { $(irm https://raw.githubusercontent.com/CaesiumY/e2e-flow-skill/main/install.ps1) } -Target project -Ref v1.0.0"
 ```
 
-설치 후 Claude Code를 재시작하면 스킬이 자동 로드됩니다.
+설치 후 AI 도구를 재시작하면 스킬이 자동 로드됩니다 (Claude Code에서 검증; 다른 호환 도구는 SKILL.md를 직접 참조해 사용).
 
 ---
 
 ## 무엇을 하는 스킬인가요?
 
-Claude Code 안에서 자연어로 부르면 작동하는 **트리거 기반 스킬**입니다. 항상 켜져 있지 않고, 다음 표현이 감지되면 자동 발동합니다:
+자연어로 부르면 작동하는 **트리거 기반 스킬**입니다. 항상 켜져 있지 않고, 다음 표현이 감지되면 자동 발동합니다:
 
 - **"Playwright 셋업해줘"** → 인프라 셋업 (Phase 1)
 - **"이 페이지 테스트 만들어줘"** → 자연어 → 코드 변환 (Phase 2)
@@ -207,7 +209,7 @@ e2e-flow-skill/
 
 ## 동작 요건
 
-- **Claude Code** (Skill 지원 버전)
+- **Skill 형식을 지원하는 AI 코딩 에이전트** (Claude Code에서 검증; 다른 호환 도구는 어댑터 작업이 필요할 수 있음)
 - 대상 프로젝트: **Node.js**, 패키지 매니저 무관 (pnpm / npm / yarn / bun 자동 감지)
 - **Playwright 1.40+** 권장 (Fixture, trace, `getByRole` 등 사용)
 - **Git** 권장 (자가 복구 패치 적용 전후 diff 확인 용이)
@@ -235,7 +237,7 @@ e2e-flow-skill/
 - **VRT는 CI 게이트로 강제하지 않습니다.** OS·브라우저 렌더링 차이가 false-positive를 만들어 의미 있는 변화도 묻히기 때문. 로컬에서 `pnpm test:vrt` 로 검토용으로만 사용합니다.
 - **자가 복구가 모든 실패를 고치진 않습니다.** APP_BUG / ENV_ISSUE는 의도적으로 수정하지 않습니다 — 앱 버그를 테스트 수정으로 덮는 것을 막기 위함.
 - **Helper는 디자인 시스템 변경에 동기화 필요**합니다. 버튼 텍스트나 ARIA 구조가 바뀌면 Helper 내부 한 줄 수정으로 전체 테스트가 복구되도록 설계되어 있습니다.
-- **Claude Code 전용**입니다. Cursor/Cline/Gemini 등 다른 AI 도구로의 이식은 워크플로우의 서브에이전트 의존성 때문에 직접 지원하지 않습니다 (어댑터 PR은 환영).
+- **자동 파이프라인의 실행은 Claude Code에서 검증되었습니다.** 서브에이전트 디스패치·도구 호출에 의존하므로, Cursor/Cline/Gemini 등 다른 AI 도구에서는 어댑터 작업이 필요할 수 있습니다 (PR 환영). 한편 *Helper 6종·Selector 우선순위·specs/flows 구조·자가 복구 분류·CI 워크플로우* 같은 **콘셉트와 산출물은 도구·팀과 무관하게** 그대로 가져다 쓸 수 있습니다 — `skills/e2e-flow/` 만 복사해서 팀 위키나 다른 AI 도구의 룰 파일에 임베드하는 것도 유효한 사용법입니다.
 
 ---
 

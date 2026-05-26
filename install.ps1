@@ -1,6 +1,7 @@
 # e2e-flow-skill installer (Windows PowerShell 5.1+ / PowerShell 7+)
 #
-# Installs the e2e-flow Claude Code skill. Trigger-based; no CLAUDE.md merge.
+# Installs the e2e-flow skill (auto-pipeline verified on Claude Code; content
+# reusable elsewhere). Trigger-based; no CLAUDE.md merge.
 #
 # Usage:
 #   irm https://raw.githubusercontent.com/CaesiumY/e2e-flow-skill/main/install.ps1 | iex
