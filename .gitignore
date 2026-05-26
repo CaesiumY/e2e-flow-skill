@@ -1,0 +1,33 @@
+# OS 메타
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 에디터
+.vscode/
+.idea/
+*.swp
+*~
+
+# 로그
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# 의존성 (이 레포는 스킬 정의만 가지므로 node_modules는 본래 없어야 하지만 안전을 위해)
+node_modules/
+
+# 설치 스크립트 실행 시 임시
+*.tmp
+.install-work/
+
+# 통합 검증용 임시 프로젝트
+/test-target/
+/.tmp-verify/
+
+# Playwright (검증 중 발생하는 부산물)
+test-results/
+playwright-report/
+playwright/.cache/
