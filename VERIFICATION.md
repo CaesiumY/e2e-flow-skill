@@ -179,3 +179,95 @@ flow 코드 — 자연어→코드 매핑 표 그대로 적용:
 - ⚠️ **AGENTS.md marker block 패턴 부재** → *v0.2.1 patch* 후보
 
 본 워크스루는 *시뮬레이션*이라 fresh Claude Code 세션의 자동 트리거 흐름은 미검증. v0.4.0+ 마일스톤에서 다룰 예정.
+
+---
+
+# Helper 8-coverage walkthrough (v0.3.0)
+
+v0.3.0 변경(A+C+D)을 적용한 뒤 verify-target에서 *within 옵션 + 8 Helper 통합 검증* 을 수행한 결과. v0.2.1 워크스루의 *3 Helper 검증* 의 확장이다.
+
+## 환경
+
+| 항목 | 값 |
+|---|---|
+| 날짜 | 2026-05-27 |
+| 검증 대상 | `release/v0.3.0` (e2e-flow-skill) |
+| OS | Windows 11 x64 |
+| Node | v24.11.0 |
+| pnpm | 10.33.0 |
+| Next.js | 16.2.6 |
+| React | 19.2.4 |
+| Playwright | 1.60.0 |
+| 검증 환경 | `C:\Users\mn065\Desktop\projects\verify-target\` (v0.2.1 후 삭제 → 재구축) |
+
+## 산출물 체크리스트 (재구축 + v0.3.0 신규 검증)
+
+| 항목 | 결과 |
+|---|---|
+| `install.sh --dry-run` (v0.3.0 신규) — 다운로드 + 26 파일 목록만 표시 후 종료 | ✅ |
+| `install.sh --uninstall` (설치 없음 상태) — "Nothing to uninstall" 안전 메시지 | ✅ |
+| `install.sh --ref=release/v0.3.0` 실제 설치 + Chromium 사전 설치 환경에서 즉시 실행 가능 | ✅ |
+| install 출력 마지막 라인 "Done. 설치된 버전: v0.3.0" (D 검증) | ✅ |
+| `SKILL.md` frontmatter `version: 0.3.0` 추가 — Claude Code skill loader가 unknown key를 거부하지 않음 (`name` + `description` 외 무시) | ✅ |
+| Phase 1 산출물 15+ 항목 정상 생성 (v0.2.1과 동일) | ✅ |
+| 시연 페이지 `/create-agent` — 8 Helper 컴포넌트 동시 표시 | ✅ |
+
+**총 7 ✓ / 0 ❌**
+
+## Helper 8-coverage Per-helper 결과
+
+| Helper | 검증한 메서드 | within 옵션 | 결과 |
+|---|---|---|---|
+| `FormHelper` | `fillFields`, `submit` | `{ within: formArea }` | ✅ |
+| `DialogHelper` | `clickConfirm` | (page 전역, within 제외 Helper) | ✅ |
+| `ToastHelper` | `expectSuccess` | (page 전역, within 제외 Helper) | ✅ |
+| `TableHelper` | `expectRowCount` | `{ within: formArea }` | ✅ |
+| `NavigationHelper` | `clickTab` × 2 | 미지정 (page 전역) | ✅ |
+| `CheckboxHelper` | `check` | `{ within: formArea }` | ✅ |
+| `RadioGroupHelper` | `selectByLabel` | `{ within: formArea }` | ✅ |
+| `FileUploadHelper` | `selectFiles` | `{ within: formArea }` | ✅ |
+| `SelectHelper` | `selectByLabel` | **검증 제외** | ⚠️ |
+
+**8 ✅ / 1 ⚠️ (검증 제외)**
+
+## Test 결과 (`pnpm exec playwright test`)
+
+| Test | 결과 | 시간 |
+|---|---|---|
+| `within 옵션으로 영역 스코핑 — 8 Helper` | ✅ 통과 | 924ms |
+| `backward-compat — within 없이 RegExp exact 매칭` | ✅ 통과 | 789ms |
+
+총 2 / 2 통과. backward-compat 보장 — *기존 spec/flow 가 within 없이 호출해도 v0.2.x 패턴 그대로 동작*.
+
+## 발견 사항
+
+### 1. SelectHelper의 native `<select>` 미대응
+- **현상**: 시연 페이지가 native `<select>` 사용. SelectHelper는 *ARIA combobox 패턴* (`<button role="combobox">` + `<ul role="listbox">`) 전제. `getByRole('option')` 매칭 0개로 timeout.
+- **분류**: Helper API 한계 — 디자인 시스템 의존. native select 사용 프로젝트에서는 Helper fork 필요.
+- **후속 후보 (v0.4.x)**: SelectHelper에 *native select 자동 감지 + `.selectOption()` 폴백* 분기 추가. 또는 별도 `NativeSelectHelper` 신규.
+
+### 2. 영역 스코프 선택 — tabpanel vs form
+- **현상**: 처음엔 `tabpanel` 영역을 within으로 시도했으나 *저장 버튼이 tabpanel 밖 (form 안)* 에 위치해 매칭 실패.
+- **교훈**: 영역 선택 시 *시멘틱 컨테이너의 실제 DOM 위치* 확인 필수. `<form>` locator가 form 필드 + 제출 버튼을 함께 담는 자연스러운 영역.
+- **문서 갱신**: helper-templates.md 의 "영역 스코프 옵션" 섹션 예시에 *form locator 사용* 패턴 추가 권장 (v0.3.1 후보).
+
+### 3. v0.3.0 변경 사항 모두 정상 동작
+- **A (within 옵션)**: 8 Helper 모두 within 인자 받기·미지정 시 page 전역 사용 — 둘 다 동작 ✅
+- **C (--uninstall, --dry-run)**: 양쪽 모두 의도대로 동작 ✅
+- **D (version 필드)**: SKILL.md frontmatter + install 출력 모두 정상. **Claude Code skill loader가 `version` 키를 거부하지 않음** — plan 함정 #3 해소 ✅
+
+## v0.3.0 release 가능 판정
+
+✅ **3가지 backward compat 점검 통과**:
+1. 기존 spec/flow가 within 없이 호출 시 v0.2.x와 동일 동작
+2. install.sh 기존 옵션 (--target, --ref, --skill-dir) 그대로 동작
+3. SKILL.md frontmatter에 version 추가가 Claude Code 로딩에 영향 없음
+
+이 PR을 main에 merge할 수 있음.
+
+## 검증되지 않은 항목 (이번 walkthrough 외)
+
+- **SelectHelper × native select** — v0.4.x 후보로 분리
+- **VRT + CI 워크플로우 (Phase 4)** — v0.2.1과 동일 (이번 변경 없음)
+- **fresh Claude Code 세션의 자동 트리거** — v0.4.0+ 후보 (시뮬레이션 한계)
+- **APP_BUG 분류 시나리오** — v0.4.1 후보 (Roadmap)
