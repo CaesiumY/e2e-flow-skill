@@ -7,6 +7,11 @@
 #   irm https://raw.githubusercontent.com/CaesiumY/e2e-flow-skill/main/install.ps1 | iex
 #   iex "& { $(irm https://raw.githubusercontent.com/CaesiumY/e2e-flow-skill/main/install.ps1) } -Target project"
 #   iex "& { $(irm https://raw.githubusercontent.com/CaesiumY/e2e-flow-skill/main/install.ps1) } -Ref v1.2.3"
+#
+# Default location: ~/.claude/skills/ (Claude Code's standard skills directory,
+# the host where the auto-pipeline is verified). For other AI coding agents
+# (Cursor, Cline, Codex, Gemini CLI), use -SkillDir <their-skills-path>.
+# See README.md > "호스트 도구 호환성" for the per-tool path mapping.
 
 [CmdletBinding()]
 param(

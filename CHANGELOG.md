@@ -7,6 +7,11 @@
 
 ## [Unreleased]
 
+### Changed
+- GitHub repository metadata 벤더 중립화 — description과 topics에서 `claude-code` / `claude-skill` 제거, `ai-skill` / `vrt` 추가. Wiki 비활성화 + Discussions 활성화
+- `README.md` 에 **호스트 도구 호환성** 섹션 추가 — Claude Code / Cursor / Cline / Codex / Gemini CLI 의 스킬 인식 위치, 자동 파이프라인 검증 여부, 설치 명령을 표로 명시
+- `install.sh` / `install.ps1` 헤더 주석에 디폴트 경로 `~/.claude/skills/` 가 Claude Code 표준이라는 이유 + `--skill-dir` / `-SkillDir` 안내 강화
+
 ## [0.2.0] - 2026-05-27
 
 ### Added

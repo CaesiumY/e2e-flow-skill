@@ -12,6 +12,11 @@
 #   bash install.sh --ref=v1.2.3              # pin to a tag/branch (default: main)
 #   bash install.sh --skill-dir=/custom/path  # override install destination
 #
+# Default location: ~/.claude/skills/ (Claude Code's standard skills directory,
+# the host where the auto-pipeline is verified). For other AI coding agents
+# (Cursor, Cline, Codex, Gemini CLI), use --skill-dir=<their-skills-path>.
+# See README.md > "호스트 도구 호환성" for the per-tool path mapping.
+#
 # The skill is trigger-based: the host AI tool invokes it automatically when
 # your prompt matches the SKILL.md description (e.g. "Playwright 셋업",
 # "E2E 테스트 추가", "테스트 깨졌어 고쳐줘"). No CLAUDE.md merge needed.

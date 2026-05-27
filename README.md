@@ -217,6 +217,26 @@ e2e-flow-skill/
 - **Playwright 1.40+** 권장 (Fixture, trace, `getByRole` 등 사용)
 - **Git** 권장 (자가 복구 패치 적용 전후 diff 확인 용이)
 
+자세한 호스트 호환성과 설치 경로는 아래 [호스트 도구 호환성](#호스트-도구-호환성) 섹션을 참조하세요.
+
+---
+
+## 호스트 도구 호환성
+
+스킬 형식 자체는 **벤더 중립** — 어떤 AI 코딩 에이전트든 SKILL.md 형식을 인식하면 e2e-flow의 콘셉트와 산출물을 사용할 수 있습니다. 다만 **자동 4단계 파이프라인 실행** 은 서브에이전트 디스패치·도구 호출에 의존하므로 Claude Code 환경에서만 검증되어 있습니다.
+
+| AI 코딩 에이전트 | 스킬 인식 위치 | 자동 파이프라인 | 설치 |
+|---|---|---|---|
+| **Claude Code** | `~/.claude/skills/e2e-flow/` | ✅ 검증됨 | `install.sh` / `install.ps1` 기본값 |
+| **Cursor** | `.cursor/rules/` — SKILL.md를 룰로 변환 필요 | ❌ 어댑터 작업 필요 | `install.sh --skill-dir=.cursor/rules/e2e-flow` |
+| **Cline** | `.clinerules` 임베드 | ❌ 어댑터 작업 필요 | 수동 (SKILL.md 본문을 `.clinerules`에 포함) |
+| **Codex / generic** | 프로젝트의 `AGENTS.md` 임베드 | ❌ 어댑터 작업 필요 | 수동 |
+| **Gemini CLI** | `GEMINI.md` 임베드 | ❌ 어댑터 작업 필요 | 수동 |
+
+> ❌ 표시는 *기능을 못 한다*는 의미가 아니라 *자동 파이프라인이 검증되지 않았다*는 뜻입니다. Helper 6 종·Selector 우선순위·specs/flows 구조·CI 워크플로우 등 **콘셉트와 산출물은 어느 도구에서든 그대로 가져다 쓸 수 있습니다.** 어댑터 PR 환영 — 시작점은 [`CONTRIBUTING.md`](./CONTRIBUTING.md).
+
+**왜 `~/.claude/skills/` 가 디폴트인가**: Claude Code가 *자동 파이프라인이 검증된 기준 호스트* 이기 때문입니다. 다른 도구를 쓰면 `install.sh --skill-dir=<path>` (bash) 또는 `install.ps1 -SkillDir <path>` (PowerShell) 옵션으로 경로를 오버라이드할 수 있습니다.
+
 ---
 
 ## 커스터마이즈
