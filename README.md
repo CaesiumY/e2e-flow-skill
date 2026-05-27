@@ -39,6 +39,8 @@ npx skills add CaesiumY/e2e-flow-skill
 | `--target=project` (bash) / `-Target project` (PS) | 현재 프로젝트의 `./.claude/skills/` 에 설치 | `--target=global` (`~/.claude/skills/`) |
 | `--ref=<tag\|branch>` (bash) / `-Ref <ref>` (PS) | 특정 태그/브랜치에 고정 | `main` |
 | `--skill-dir=<path>` (bash) / `-SkillDir <path>` (PS) | 임의 디렉터리에 설치 | — |
+| `--dry-run` (bash) / `-DryRun` (PS) | tarball 다운로드 후 *복사 없이* 어떤 파일이 어디에 설치될지만 요약 출력. 네트워크 필요 | — |
+| `--uninstall` (bash) / `-Uninstall` (PS) | `$SKILLS_DIR/$SKILL_NAME` 만 삭제 (부모 디렉터리 보존, 다른 스킬 영향 없음). 네트워크 불필요 | — |
 
 **예시 — 프로젝트 로컬 + 특정 태그**:
 

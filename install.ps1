@@ -7,6 +7,8 @@
 #   irm https://raw.githubusercontent.com/CaesiumY/e2e-flow-skill/main/install.ps1 | iex
 #   iex "& { $(irm https://raw.githubusercontent.com/CaesiumY/e2e-flow-skill/main/install.ps1) } -Target project"
 #   iex "& { $(irm https://raw.githubusercontent.com/CaesiumY/e2e-flow-skill/main/install.ps1) } -Ref v1.2.3"
+#   iex "& { $(irm https://raw.githubusercontent.com/CaesiumY/e2e-flow-skill/main/install.ps1) } -DryRun"
+#   iex "& { $(irm https://raw.githubusercontent.com/CaesiumY/e2e-flow-skill/main/install.ps1) } -Uninstall"
 #
 # Default location: ~/.claude/skills/ (Claude Code's standard skills directory,
 # the host where the auto-pipeline is verified). For other AI coding agents
@@ -20,7 +22,11 @@ param(
 
   [string]$Ref = 'main',
 
-  [string]$SkillDir = ''
+  [string]$SkillDir = '',
+
+  [switch]$Uninstall,
+
+  [switch]$DryRun
 )
 
 $ErrorActionPreference = 'Stop'
@@ -38,8 +44,23 @@ elseif ($Target -eq 'project') {
 else {
   $SkillsDir = Join-Path $env:USERPROFILE '.claude\skills'
 }
+$DestPath = Join-Path $SkillsDir $SkillName
 
-# 임시 작업 디렉터리
+# ---------- Uninstall mode (no download) ----------
+if ($Uninstall) {
+  if (-not (Test-Path $DestPath)) {
+    Write-Host "Nothing to uninstall: $DestPath not found"
+    exit 0
+  }
+  Write-Host "↺ removing $DestPath"
+  Remove-Item -Recurse -Force $DestPath
+  Write-Host "✔ uninstalled $SkillName from $SkillsDir\"
+  Write-Host ""
+  Write-Host "Note: parent directory $SkillsDir\ preserved (other skills untouched)."
+  exit 0
+}
+
+# ---------- Download + extract (needed for both install and dry-run) ----------
 $WorkDir = Join-Path ([IO.Path]::GetTempPath()) ("e2e-flow-skill-" + [Guid]::NewGuid().ToString('N').Substring(0, 8))
 New-Item -ItemType Directory -Path $WorkDir -Force | Out-Null
 
@@ -61,11 +82,28 @@ try {
     throw "skills\$SkillName not found in tarball"
   }
 
+  # ---------- Dry-run: list files and exit ----------
+  if ($DryRun) {
+    Write-Host ""
+    Write-Host "=== Dry-run: files that would be installed ==="
+    Write-Host "Destination: $DestPath\"
+    Write-Host ""
+    $Files = Get-ChildItem -Path $SrcPath -Recurse -File
+    foreach ($f in $Files) {
+      $rel = $f.FullName.Substring($SrcPath.Length + 1)
+      Write-Host "  $rel"
+    }
+    Write-Host ""
+    Write-Host "총 $($Files.Count) 개 파일이 $DestPath\ 에 복사됩니다."
+    Write-Host "(실제 설치는 -DryRun 옵션 없이 다시 실행)"
+    exit 0
+  }
+
+  # ---------- Actual install ----------
   if (-not (Test-Path $SkillsDir)) {
     New-Item -ItemType Directory -Path $SkillsDir -Force | Out-Null
   }
 
-  $DestPath = Join-Path $SkillsDir $SkillName
   if (Test-Path $DestPath) {
     Write-Host "↺ existing install detected at $DestPath — replacing"
     Remove-Item -Recurse -Force $DestPath
