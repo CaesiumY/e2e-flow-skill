@@ -105,6 +105,18 @@ await dataSourceArea.getByRole('button', { name: '폴더 생성' }).click();
 2. `getByRole('dialog' | 'tabpanel' | 'navigation', ...)` — 시멘틱 컨테이너
 3. `getByTestId(...)` — 사용자 정의 영역
 
+### Helper의 `within` 옵션 (v0.3.0+)
+
+영역 스코핑은 **Helper의 메서드 인자**로도 전달할 수 있다 (`Form/Select/Table/Navigation/Checkbox/RadioGroup/FileUploadHelper`).
+
+```ts
+const formArea = page.getByRole('main').getByRole('form');
+await form.fillFields({ 이름: 'X' }, { within: formArea });
+await form.submit('저장', { within: formArea });  // 헤더의 다른 '저장' 무시
+```
+
+자세한 패턴·적용 표는 [`helper-templates.md` 의 "영역 스코프 옵션" 섹션](./helper-templates.md#영역-스코프-옵션-within--v030)에 정리.
+
 ---
 
 ## 금지 패턴

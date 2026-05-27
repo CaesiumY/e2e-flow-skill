@@ -379,6 +379,55 @@ test('계약 신분증 첨부', async ({ page, fileUpload, toast }) => {
 
 ---
 
+## 영역 스코프 옵션 (`within`) — v0.3.0+
+
+**모든 Helper의 메서드는 마지막 인자로 `opts?: { within?: Locator }`를 받는다** (`DialogHelper`·`ToastHelper` 제외). within이 지정되면 page 전역이 아닌 해당 영역(`Locator`) 안에서만 selector를 검색한다 — 같은 페이지에 비슷한 라벨의 요소가 여럿일 때 (예: header와 form 양쪽에 `저장` 버튼) strict mode 위반을 사전 차단한다.
+
+### 패턴
+
+```ts
+// e2e/helpers/FormHelper.ts (excerpt)
+async submit(
+  label: string | RegExp = '저장',
+  opts?: { within?: Locator },
+): Promise<void> {
+  const root = opts?.within ?? this.page;
+  await root.getByRole('button', { name: label }).click();
+}
+```
+
+### 적용 여부
+
+| Helper | within 옵션 | 비고 |
+|---|---|---|
+| `FormHelper` | ✅ | 4 메서드 모두 |
+| `SelectHelper` | ✅ | trigger만 root 스코프, option 메뉴는 portal 가능성으로 page 전역 |
+| `TableHelper` | ✅ | 4 메서드 모두 |
+| `NavigationHelper` | ⚠️ 부분 | clickTab/expectActiveTab/expectBreadcrumb 적용, `expectUrlMatches`는 page 전역 (URL 상태 본질) |
+| `CheckboxHelper` | ✅ | `private locate()` 안에서 root 적용 |
+| `RadioGroupHelper` | ✅ | radiogroup 자체 검색을 좁히는 용도 |
+| `FileUploadHelper` | ✅ | 4 메서드 모두 |
+| `DialogHelper` | ❌ | 모달 자체가 영역 컨테이너 (`getByRole('dialog')`로 이미 좁힘) |
+| `ToastHelper` | ❌ | 토스트는 페이지 전역에서 띄워지는 게 자연 |
+
+### 사용 예 — 헤더 저장 버튼과 폼 저장 버튼이 함께 있는 페이지
+
+```ts
+test('에이전트 생성', async ({ page, form }) => {
+  await page.goto('/create-agent');
+  const formArea = page.getByRole('main').getByRole('form');
+  await form.fillFields(
+    { 이름: '테스트', 설명: '설명' },
+    { within: formArea },
+  );
+  await form.submit('저장', { within: formArea });  // 헤더 '저장' 버튼 무시
+});
+```
+
+within이 없을 때(`form.submit('저장')`)는 기존과 동일하게 page 전역에서 검색 — **backward-compatible**.
+
+---
+
 ## Helper 확장 원칙
 
 - **새 디자인 시스템 컴포넌트가 추가되면 Helper도 함께 추가**한다 (예: `DatePickerHelper`, `PaginationHelper`, `SearchHelper` — Tier B 후보). v0.2.0에서 `CheckboxHelper`, `RadioGroupHelper`, `FileUploadHelper` Tier A 3종이 추가됨.
