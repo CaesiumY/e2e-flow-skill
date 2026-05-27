@@ -1,5 +1,6 @@
 ---
 name: e2e-flow
+version: 0.3.0
 description: Playwright 기반 프론트엔드 E2E 테스트 파이프라인. 자연어 시나리오를 규칙 준수 spec/flow 코드로 변환하고, 실패 시 trace 분석으로 자가 복구한다. 사용 시점 - "E2E 테스트 추가해줘", "Playwright 셋업해줘", "이 페이지 테스트 만들어줘", "테스트가 깨졌어 고쳐줘", "VRT 붙여줘", "E2E CI 최적화해줘", "Playwright shard 설정해줘".
 ---
 

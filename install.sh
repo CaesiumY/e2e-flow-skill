@@ -115,9 +115,15 @@ fi
 cp -r "$SRC" "$DEST"
 echo "✔ installed $SKILL_NAME -> $DEST/"
 
+# SKILL.md frontmatter에서 version 추출 (없으면 unknown 표시)
+INSTALLED_VERSION="$(grep -m1 '^version:' "$DEST/SKILL.md" 2>/dev/null | awk '{print $2}' || true)"
+if [ -z "$INSTALLED_VERSION" ]; then
+  INSTALLED_VERSION="unknown"
+fi
+
 cat <<EOF
 
-Done.
+Done. 설치된 버전: v${INSTALLED_VERSION}
 
 Trigger phrases (자연어로 호출하면 자동 발동):
   - "Playwright 셋업해줘", "E2E 테스트 추가해줘"
@@ -127,4 +133,5 @@ Trigger phrases (자연어로 호출하면 자동 발동):
 
 스킬 위치: $DEST/
 SKILL.md:  $DEST/SKILL.md
+버전 재확인: grep '^version:' $DEST/SKILL.md
 EOF
