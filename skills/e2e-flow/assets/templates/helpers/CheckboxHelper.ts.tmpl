@@ -6,36 +6,56 @@ export class CheckboxHelper {
   constructor(private readonly page: Page) {}
 
   /** 체크 — setChecked(true)로 멱등 처리. 이미 체크된 상태에서도 안전. */
-  async check(label: string | RegExp): Promise<void> {
-    await this.locate(label).setChecked(true);
+  async check(
+    label: string | RegExp,
+    opts?: { within?: Locator },
+  ): Promise<void> {
+    await this.locate(label, opts).setChecked(true);
   }
 
   /** 체크 해제 — setChecked(false)로 멱등 처리. */
-  async uncheck(label: string | RegExp): Promise<void> {
-    await this.locate(label).setChecked(false);
+  async uncheck(
+    label: string | RegExp,
+    opts?: { within?: Locator },
+  ): Promise<void> {
+    await this.locate(label, opts).setChecked(false);
   }
 
   /** 현재 상태 반전. "X 토글" 자연어에 매핑. */
-  async toggle(label: string | RegExp): Promise<void> {
-    await this.locate(label).click();
+  async toggle(
+    label: string | RegExp,
+    opts?: { within?: Locator },
+  ): Promise<void> {
+    await this.locate(label, opts).click();
   }
 
   /** 체크 상태 검증. 기본값 true. */
-  async expectChecked(label: string | RegExp, checked = true): Promise<void> {
-    const locator = this.locate(label);
+  async expectChecked(
+    label: string | RegExp,
+    checked = true,
+    opts?: { within?: Locator },
+  ): Promise<void> {
+    const locator = this.locate(label, opts);
     if (checked) await expect(locator).toBeChecked();
     else await expect(locator).not.toBeChecked();
   }
 
   /** 여러 항목 일괄 체크 (순차 setChecked). */
-  async checkMultiple(labels: string[]): Promise<void> {
+  async checkMultiple(
+    labels: string[],
+    opts?: { within?: Locator },
+  ): Promise<void> {
     for (const label of labels) {
-      await this.locate(label).setChecked(true);
+      await this.locate(label, opts).setChecked(true);
     }
   }
 
   /** ARIA role=checkbox 기반 매칭. native input과 button[role=checkbox] 모두 지원. */
-  private locate(label: string | RegExp): Locator {
-    return this.page.getByRole('checkbox', { name: label });
+  private locate(
+    label: string | RegExp,
+    opts?: { within?: Locator },
+  ): Locator {
+    const root = opts?.within ?? this.page;
+    return root.getByRole('checkbox', { name: label });
   }
 }
