@@ -24,6 +24,37 @@ const dialog = page.getByRole('dialog', { name: '삭제 확인' });
 
 **언제 쓰는가**: 시멘틱 HTML 요소를 다룰 때 항상.
 
+#### ⚠️ Substring 매칭 함정 (반드시 인지)
+
+Playwright의 `getByRole(name)` 은 기본적으로 **substring 매칭** 이다. 한 페이지에 비슷한 라벨의 요소가 둘 이상이면 strict mode violation으로 실패한다.
+
+```ts
+// ❌ 페이지에 '저장' 버튼 두 개 — header("페이지 헤더 저장" via aria-label)와
+//    form("저장") — 둘 다 매칭되어 strict mode violation
+await page.getByRole('button', { name: '저장' }).click();
+// → strict mode violation: resolved to 2 elements
+```
+
+**회피 방법 2가지** — 의미에 맞춰 선택:
+
+```ts
+// ✅ A. RegExp exact 매칭 (^...$ 앵커)
+await page.getByRole('button', { name: /^저장$/ }).click();
+
+// ✅ B. exact: true 옵션
+await page.getByRole('button', { name: '저장', exact: true }).click();
+```
+
+둘은 동일한 결과지만, RegExp가 *자연어→코드 매핑*에서 더 일관됨 (대소문자·공백 변형도 한 표현에 담을 수 있음).
+
+**더 나은 대안**: 영역 스코핑으로 후보를 먼저 좁힌 뒤 substring 매칭. 의미가 명확해진다. ([영역 스코핑](#영역-스코핑-area-scoping) 섹션 참조)
+
+```ts
+// ✅ C. 영역 스코프로 후보 축소
+const form = page.getByRole('main').getByRole('form');
+await form.getByRole('button', { name: '저장' }).click();
+```
+
 ### 2순위 — ARIA 속성 (Label / Placeholder)
 
 폼 입력은 1순위 role(`textbox`)로 잡기 어려운 경우가 많아 label/placeholder를 사용한다.

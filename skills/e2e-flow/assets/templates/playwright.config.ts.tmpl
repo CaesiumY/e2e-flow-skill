@@ -15,7 +15,8 @@ export default defineConfig({
 
   use: {
     baseURL: BASE_URL,
-    trace: 'on-first-retry',
+    // 첫 실패에도 trace.zip 보존 — Self-Healer가 trace를 분석해 분류·패치 제안
+    trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
     actionTimeout: 10_000,

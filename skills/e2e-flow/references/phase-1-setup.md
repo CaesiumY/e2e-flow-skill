@@ -114,16 +114,25 @@ pnpm exec playwright install chromium
 (SKILL.md의 매핑표를 그대로 임베드)
 ```
 
-### 4.3 AGENTS.md 등록
+### 4.3 AGENTS.md 등록 (marker block 패턴)
 
-루트 `AGENTS.md` 가 있으면 "사용 가능한 스킬" 섹션에 항목 추가. 없으면 새로 생성.
+루트 `AGENTS.md` 에 e2e-flow 스킬 등록. 다른 도구(예: Next.js `create-next-app` 의 `--agents-md` default)가 이미 자체 marker block을 박아둘 수 있으므로, **e2e-flow도 자체 marker block으로 감싸** 추가한다. 멱등 보장 + 충돌 회피.
 
 ```markdown
+<!-- BEGIN:e2e-flow-skill -->
 ## 사용 가능한 스킬
 
-- e2e-flow-generator: Playwright E2E 시나리오를 추가할 때 참조합니다.
-  (파일: docs/ai/skills/e2e-flow-generator.md)
+- **e2e-flow-generator**: Playwright E2E 시나리오를 추가할 때 참조합니다.
+  (파일: `docs/ai/skills/e2e-flow-generator.md`)
+<!-- END:e2e-flow-skill -->
 ```
+
+**처리 규칙**:
+- `AGENTS.md` 없음 → 새로 생성, 위 block을 본문으로
+- 있는데 `<!-- BEGIN:e2e-flow-skill -->` 마커 없음 → 파일 끝에 빈 줄 + block append
+- 있고 마커 있음 → 마커 사이 내용을 *치환* (단순 append 금지 — 중복 누적)
+
+다른 도구의 marker block(예: `<!-- BEGIN:nextjs-agent-rules -->`)은 건드리지 않는다.
 
 ### 4.4 package.json 스크립트 추가
 
