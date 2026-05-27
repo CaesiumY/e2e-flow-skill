@@ -112,9 +112,17 @@ try {
   Copy-Item -Recurse $SrcPath $DestPath
   Write-Host "✔ installed $SkillName -> $DestPath\"
 
+  # SKILL.md frontmatter에서 version 추출 (없으면 unknown 표시)
+  $VersionLine = Get-Content (Join-Path $DestPath 'SKILL.md') -ErrorAction SilentlyContinue | Where-Object { $_ -match '^version:\s*(.+)$' } | Select-Object -First 1
+  if ($VersionLine -and $VersionLine -match '^version:\s*(.+)$') {
+    $InstalledVersion = $Matches[1].Trim()
+  } else {
+    $InstalledVersion = 'unknown'
+  }
+
   Write-Host @"
 
-Done.
+Done. 설치된 버전: v$InstalledVersion
 
 Trigger phrases (자연어로 호출하면 자동 발동):
   - "Playwright 셋업해줘", "E2E 테스트 추가해줘"
@@ -124,6 +132,7 @@ Trigger phrases (자연어로 호출하면 자동 발동):
 
 스킬 위치: $DestPath\
 SKILL.md:  $DestPath\SKILL.md
+버전 재확인: Select-String '^version:' '$DestPath\SKILL.md'
 "@
 }
 finally {

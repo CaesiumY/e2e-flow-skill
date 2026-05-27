@@ -54,6 +54,19 @@ iex "& { $(irm https://raw.githubusercontent.com/CaesiumY/e2e-flow-skill/main/in
 
 설치 후 AI 도구를 재시작하면 스킬이 자동 로드됩니다 (Claude Code에서 검증; 다른 호환 도구는 SKILL.md를 직접 참조해 사용).
 
+**설치된 버전 확인** — install 출력의 `설치된 버전: vX.Y.Z` 라인을 보거나, SKILL.md frontmatter를 직접 확인:
+
+```bash
+# bash / Git Bash
+grep '^version:' ~/.claude/skills/e2e-flow/SKILL.md
+# → version: 0.3.0
+```
+
+```powershell
+# PowerShell
+Select-String '^version:' "$env:USERPROFILE\.claude\skills\e2e-flow\SKILL.md"
+```
+
 ---
 
 ## 무엇을 하는 스킬인가요?
