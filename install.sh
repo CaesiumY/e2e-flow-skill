@@ -11,6 +11,8 @@
 #   bash install.sh --target=project          # install into ./.claude/skills/ instead of ~/.claude/skills/
 #   bash install.sh --ref=v1.2.3              # pin to a tag/branch (default: main)
 #   bash install.sh --skill-dir=/custom/path  # override install destination
+#   bash install.sh --dry-run                 # download + list what would be copied, no install (requires network)
+#   bash install.sh --uninstall               # remove $SKILLS_DIR/$SKILL_NAME only (parent preserved). no download
 #
 # Default location: ~/.claude/skills/ (Claude Code's standard skills directory,
 # the host where the auto-pipeline is verified). For other AI coding agents
@@ -28,6 +30,8 @@ SKILL_NAME="e2e-flow"
 REF="main"
 TARGET="global"
 CUSTOM_DIR=""
+UNINSTALL=0
+DRY_RUN=0
 
 for arg in "$@"; do
   case "$arg" in
@@ -35,8 +39,10 @@ for arg in "$@"; do
     --target=global)   TARGET="global" ;;
     --ref=*)           REF="${arg#--ref=}" ;;
     --skill-dir=*)     CUSTOM_DIR="${arg#--skill-dir=}" ;;
+    --uninstall)       UNINSTALL=1 ;;
+    --dry-run)         DRY_RUN=1 ;;
     -h|--help)
-      sed -n '2,16p' "$0" | sed 's/^# //; s/^#$//'
+      sed -n '2,26p' "$0" | sed 's/^# //; s/^#$//'
       exit 0
       ;;
     *)
@@ -54,7 +60,23 @@ elif [ "$TARGET" = "project" ]; then
 else
   SKILLS_DIR="${HOME}/.claude/skills"
 fi
+DEST="$SKILLS_DIR/$SKILL_NAME"
 
+# ---------- Uninstall mode (no download) ----------
+if [ "$UNINSTALL" = "1" ]; then
+  if [ ! -d "$DEST" ]; then
+    echo "Nothing to uninstall: $DEST not found"
+    exit 0
+  fi
+  echo "↺ removing $DEST"
+  rm -rf "$DEST"
+  echo "✔ uninstalled $SKILL_NAME from $SKILLS_DIR/"
+  echo ""
+  echo "Note: parent directory $SKILLS_DIR/ preserved (other skills untouched)."
+  exit 0
+fi
+
+# ---------- Download + extract (needed for both install and dry-run) ----------
 WORK_DIR="$(mktemp -d -t e2e-flow-skill.XXXXXX)"
 trap 'rm -rf "$WORK_DIR"' EXIT
 
@@ -70,8 +92,22 @@ if [ -z "$EXTRACTED_DIR" ] || [ ! -d "$SRC" ]; then
   exit 1
 fi
 
+# ---------- Dry-run: list files and exit ----------
+if [ "$DRY_RUN" = "1" ]; then
+  echo ""
+  echo "=== Dry-run: files that would be installed ==="
+  echo "Destination: $DEST/"
+  echo ""
+  (cd "$SRC" && find . -type f) | sed 's|^\./|  |'
+  COUNT="$( (cd "$SRC" && find . -type f) | wc -l )"
+  echo ""
+  echo "총 $COUNT 개 파일이 $DEST/ 에 복사됩니다."
+  echo "(실제 설치는 --dry-run 옵션 없이 다시 실행)"
+  exit 0
+fi
+
+# ---------- Actual install ----------
 mkdir -p "$SKILLS_DIR"
-DEST="$SKILLS_DIR/$SKILL_NAME"
 if [ -d "$DEST" ]; then
   echo "↺ existing install detected at $DEST — replacing"
   rm -rf "$DEST"
