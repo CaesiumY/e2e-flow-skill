@@ -7,6 +7,9 @@
 
 ## [Unreleased]
 
+### Verified
+- **Integration verification (Phase 1-3) 완료** — 빈 Next.js 16 + React 19 + Playwright 1.60 환경에서 시뮬레이션 워크스루. install.sh 정상 동작, 자가 복구 4분류 중 3종(UI_CHANGE / TEST_BUG / ENV_ISSUE) 검증, ENV_ISSUE 안전 가드 통과. 자세한 결과·발견 사항·다음 마일스톤 후보는 [VERIFICATION.md](./VERIFICATION.md) 참조
+
 ### Changed
 - GitHub repository metadata 벤더 중립화 — description과 topics에서 `claude-code` / `claude-skill` 제거, `ai-skill` / `vrt` 추가. Wiki 비활성화 + Discussions 활성화
 - `README.md` 에 **호스트 도구 호환성** 섹션 추가 — Claude Code / Cursor / Cline / Codex / Gemini CLI 의 스킬 인식 위치, 자동 파이프라인 검증 여부, 설치 명령을 표로 명시
