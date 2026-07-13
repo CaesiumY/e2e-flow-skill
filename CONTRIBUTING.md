@@ -25,7 +25,7 @@
 - [ ] `skills/e2e-flow/assets/templates/fixtures.ts.tmpl` 의 `Helpers` 인터페이스에 추가
 - [ ] `skills/e2e-flow/references/phase-1-setup.md` 의 생성 파일 목록에 추가
 - [ ] `skills/e2e-flow/SKILL.md` 의 파일 구조 컨벤션 + 자연어→코드 매핑에 추가
-- [ ] `README.md` 의 Helper 6종 표 갱신 (개수 N종으로)
+- [ ] `README.md` 의 Helper 9종 표 갱신 (개수 N종으로)
 
 ### 2. Selector 우선순위 규칙 변경
 

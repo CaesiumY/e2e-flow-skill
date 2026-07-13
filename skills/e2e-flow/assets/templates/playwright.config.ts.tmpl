@@ -49,7 +49,7 @@ export default defineConfig({
   webServer: process.env.CI
     ? undefined
     : {
-        command: '{{PACKAGE_MANAGER}} dev',
+        command: '{{PACKAGE_MANAGER}} run dev',
         url: BASE_URL,
         reuseExistingServer: true,
         timeout: 120_000,

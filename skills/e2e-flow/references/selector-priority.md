@@ -149,6 +149,8 @@ await page.getByRole('button').first().click();
 await page.getByRole('toolbar').getByRole('button', { name: '추가' }).click();
 ```
 
+단, 메서드 이름이 의도를 명시하는 Helper 내부 구현(예: `SelectHelper.selectFirstOption`)은 의도된 예외로 허용한다.
+
 ### 텍스트 노드를 클릭
 
 텍스트가 변하면 깨진다. role + name 조합으로 의미를 고정한다.
