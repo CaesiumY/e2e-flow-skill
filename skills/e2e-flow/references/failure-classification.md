@@ -2,6 +2,14 @@
 
 Phase 3(자가 복구)에서 테스트 실패의 원인을 4가지 중 하나로 분류한다. 모든 실패를 무작정 고치면 **앱의 실제 버그를 테스트 수정으로 덮어버리는 위험**이 있으므로, 명시적 분류 기준으로 어떤 실패는 고치고 어떤 실패는 보고만 할지 결정한다.
 
+---
+
+## 분류 대상 전제 (사전 필터)
+
+TS 컴파일 에러(`TS####`), `SyntaxError`, `Cannot find module` 등 **정적 결함 신호는 이 4분류 대상이 아니다.** 이런 실패는 Self-Healer를 디스패치하지 않고, **Phase 3 사전 필터에서 메인 스레드가 import 경로·시그니처를 직접 수정**한다 (`references/phase-3-self-heal.md` Step 1.5). Self-Healer에 도달하는 실패는 정적 결함이 걸러진 **런타임·단언·selector 실패**로 한정된다.
+
+---
+
 ## 4분류 매트릭스
 
 | 분류 | 의미 | 일반적 신호 | Healer 행동 |
@@ -25,11 +33,11 @@ Phase 3(자가 복구)에서 테스트 실패의 원인을 4가지 중 하나로
 
 **Healer 동작**:
 1. trace 스크린샷에서 현재 UI를 확인
-2. **Selector 우선순위 규칙**(`references/selector-priority.md` 임베드)에 따라 새 selector 선택
+2. **Selector 우선순위 규칙**(self-healer.md 내장 축약본)에 따라 새 selector 선택
 3. Helper 내부에서 사용하는 selector면 **Helper만 수정**(파급 최소화), spec 본문이면 spec 수정
-4. patch를 unified diff로 반환
+4. 수정 내용을 EDIT 블록으로 반환 (`edits_count` 포함)
 
-**예시 패치**:
+**예시 변경 (OLD → NEW)**:
 ```diff
 - async submit(label = '저장') {
 + async submit(label = '등록') {
@@ -51,15 +59,15 @@ Phase 3(자가 복구)에서 테스트 실패의 원인을 4가지 중 하나로
    - strict mode 위반 → 영역 스코프 추가 또는 더 구체적인 name 사용
    - 대기 부족 → 명시적 `expect(...).toBeVisible()` 추가, `waitFor*` 보강
    - 잘못된 단언 → 단언 값을 trace 기준으로 수정 (단, 의도된 검증값을 함부로 바꾸지 않는다 — 의심되면 APP_BUG로 분류)
-3. patch 반환
+3. 수정 내용을 EDIT 블록으로 반환
 
-**예시 패치 — strict mode 위반**:
+**예시 변경 — strict mode 위반**:
 ```diff
 - page.getByRole('tabpanel').locator('input[type="text"]').fill('값');
 + page.getByRole('tabpanel').getByPlaceholder('검색어를 입력하세요').fill('값');
 ```
 
-**예시 패치 — 대기 부족**:
+**예시 변경 — 대기 부족**:
 ```diff
 + await expect(dialog.getByRole('button', { name: '확인' })).toBeEnabled();
   await dialog.getByRole('button', { name: '확인' }).click();
@@ -101,20 +109,19 @@ Phase 3(자가 복구)에서 테스트 실패의 원인을 4가지 중 하나로
 
 ## Healer 출력 형식
 
-서브에이전트는 항상 다음 구조로 응답한다 (메인 스레드가 파싱):
+서브에이전트는 **YAML 헤더 + `edits_count` 개수만큼의 EDIT 블록**으로 응답한다 (메인 스레드가 파싱). EDIT 블록의 정확한 형식은 `assets/prompts/self-healer.md`의 출력 계약이 단일 출처다.
 
 ```yaml
 classification: UI_CHANGE | TEST_BUG | APP_BUG | ENV_ISSUE
 confidence: 0.0 ~ 1.0
 reasoning: |
   <2-3문장으로 분류 근거>
-patch: |
-  <unified diff. APP_BUG/ENV_ISSUE이면 null>
+edits_count: 0   # 뒤따르는 EDIT 블록 개수. APP_BUG/ENV_ISSUE는 반드시 0
 notes_to_user: |
   <APP_BUG/ENV_ISSUE인 경우 사용자에게 전달할 메시지. 그 외는 짧은 요약>
 ```
 
-`confidence < 0.5`이면 메인 스레드는 패치를 적용하지 않고 사용자에게 검토 요청.
+`confidence < 0.5`이거나 오케스트레이터 재검 게이트(`references/phase-3-self-heal.md` Step 5.0)에 걸리면 메인 스레드는 edits를 적용하지 않고 사용자에게 검토를 요청한다.
 
 ---
 

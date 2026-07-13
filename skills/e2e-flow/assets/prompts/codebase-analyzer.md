@@ -22,7 +22,7 @@
   - 그 외 → "기타: <감지된 핵심 의존성>"
 
 #### 2. 패키지 매니저
-- 우선순위: `pnpm-lock.yaml` → pnpm, `yarn.lock` → yarn, `package-lock.json` → npm, `bun.lockb` → bun
+- 우선순위: `pnpm-lock.yaml` → pnpm, `yarn.lock` → yarn, `package-lock.json` → npm, `bun.lock`/`bun.lockb` → bun (Bun 1.2+ 는 텍스트 `bun.lock`)
 - 모두 없으면: `packageManager` 필드 확인, 그래도 없으면 "미확인 (기본 npm 가정)"
 
 #### 3. 디자인 시스템
@@ -84,3 +84,5 @@ notes: |
 ### 종료 조건
 
 7가지 항목을 모두 보고하면 즉시 종료. 추가 질문이나 액션 제안은 하지 않음 — 메인 스레드가 이후 단계를 결정합니다.
+
+형식(위 YAML 필드)을 이탈하면 메인 스레드가 동일 프롬프트로 **1회** 재요청하며, 형식 외 응답은 폐기됩니다.

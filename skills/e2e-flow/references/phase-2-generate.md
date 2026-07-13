@@ -6,6 +6,8 @@
 
 ## Step 1. 자연어 입력 파싱
 
+Phase 1 라우팅에서 보관·전달된 원본 시나리오가 있으면 그것을 입력으로 사용한다 (사용자 재입력 불필요).
+
 사용자 입력을 다음 4요소로 분해한다:
 
 | 요소 | 추출 단서 | 예 |
@@ -17,6 +19,12 @@
 
 도메인이 불명확하면 `AskUserQuestion` 으로 확인. 기존 `e2e/tests/` 의 도메인 디렉터리 목록을 보여주고 신규/기존 선택.
 
+**시작 경로 해소 규칙**: 사용자 입력에 URL/경로 단서가 없으면 다음 순서로 해소한다:
+1. 같은 도메인의 기존 spec에서 `page.goto()` 경로를 재사용
+2. 기존 spec도 없으면 `AskUserQuestion` 으로 시작 경로를 확인
+
+페이지명에서 URL을 추론하지 않는다 — 근거(기존 spec 또는 사용자 응답) 있는 경로만 사용한다.
+
 ---
 
 ## Step 2. 컨텍스트 로딩
@@ -24,7 +32,10 @@
 다음을 순서대로 Read한다:
 
 1. **Helper 카탈로그**: `e2e/helpers/*.ts` 의 클래스명·메서드 시그니처 추출 (전체 Read 불필요, Grep으로 `export class|async (\w+)\(` 정도면 충분)
-2. **가장 가까운 도메인 패턴**: 같은 도메인 또는 유사한 도메인의 `*.spec.ts`, `*-flows.ts` 1~2개 Read해 네이밍·구조 학습
+2. **가장 가까운 도메인 패턴**: Glob(`e2e/tests/**/*.spec.ts`, `e2e/tests/**/*-flows.ts`)으로 후보를 나열한 뒤, 다음 우선순위로 참조할 spec/flow 1쌍을 결정해 Read (전체 스캔 불필요):
+   1. 정확히 같은 `{도메인}` 디렉터리(`e2e/tests/{도메인}/`)가 있으면 그 안에서 가장 최근 수정된(mtime) spec/flow 1쌍
+   2. 없으면 `e2e/tests/` 전체에서 가장 최근 수정된(mtime) spec/flow 1쌍
+   3. 그래도 없으면 `e2e/tests/example/`
 3. **기존 mock 패턴**: `e2e/mocks/` 의 임의 1개 Read (있는 경우)
 4. **fixture 카탈로그**: `e2e/fixtures/` (있는 경우)
 
@@ -131,13 +142,50 @@ export function setAgentCreateMocks(): MockHandler[] {
 
 ---
 
+## Step 4.5. 생성물 정적 검증 게이트
+
+Step 3에서 생성한 spec/flow/mock이 실제로 컴파일·트랜스파일 가능한지 Phase 3 진입 **전**에 검증한다. **여기서 에러가 발견되면 Phase 3(자가 복구) 진입을 금지한다.** 컴파일/타입/import 에러는 자가 복구 4분류(UI_CHANGE/TEST_BUG/APP_BUG/ENV_ISSUE) 대상이 아니다 — Self-Healer를 디스패치하지 않고 메인 스레드가 직접 수정한다.
+
+### (a) Helper 메서드 실재 여부 대조
+
+생성한 flow/spec이 호출하는 Helper 메서드(예: `form.fillFields`, `dialog.clickConfirm`)를 추출해, 실제 `e2e/helpers/*.ts` 에 해당 메서드가 존재하는지 Grep으로 대조한다.
+
+```bash
+# 아래 패턴은 예시다. 실제로는 방금 생성한 flow/spec에서 호출한 메서드명을 추출해
+# 파이프(\|)로 이어 동적으로 구성한다: grep -n "<추출한 메서드들 | 로 연결>" e2e/helpers/*.ts
+grep -n "fillFields\|clickConfirm\|expectSuccess" e2e/helpers/*.ts
+```
+
+호출한 메서드가 존재하지 않으면 → 해당 flow/spec 파일을 직접 수정 (실재하는 메서드로 교체).
+
+### (b) 트랜스파일 확인
+
+**생성한 spec/flow 파일만 범위로 삼는다.** `tsc --noEmit` 은 프로젝트 전체를 컴파일하므로 기존 앱 코드의 무관한 타입 에러까지 게이트에 걸려, 방금 생성한 E2E 파일이 멀쩡한데도 Phase 3(또는 앱 코드 수정)로 잘못 빠질 수 있다. 그래서 **Playwright `--list` 를 우선 게이트로 쓴다** — 지정한 spec 경로만 트랜스파일하고 목록화하므로 다른 파일의 에러에 오염되지 않는다. 매니저별 실행 프리픽스는 phase-3-self-heal.md Step 0 표(pnpm `pnpm exec` / npm `npx` / yarn `yarn exec` / bun `bunx`)를 따른다:
+
+```bash
+# 예시(pnpm): 생성한 spec 경로만 지정
+pnpm exec playwright test {생성한 spec 경로} --list   # npm은 npx, bun은 bunx
+```
+
+TS 컴파일 에러(`TS####`), `SyntaxError`, `Cannot find module` 등이 이 spec 경로에서 나오면 → import 경로·시그니처를 직접 수정.
+
+`tsc` 가 있으면 `tsc --noEmit` 을 **참고용(비차단)** 으로 함께 돌려도 되지만, 그 결과 중 **이번에 생성한 `e2e/` 하위 파일에서 난 에러만** 차단 사유로 본다. 그 외 기존 앱 코드의 타입 에러는 게이트를 막지 않는다.
+
+### if-then 진행 규칙
+
+- **에러 발견** → 해당 파일을 메인 스레드가 직접 수정 → (a)·(b) 재검증 → 통과할 때까지 반복
+- **통과** → Step 5로 진행
+
+---
+
 ## Step 5. 즉시 Phase 3로 진입
 
-생성 직후, 사용자 확인 없이 곧바로 `references/phase-3-self-heal.md` 의 절차로 진입해 테스트를 실행하고 자가 복구 루프를 돌린다.
+Step 4.5 게이트를 통과한 직후, 사용자 확인 없이 곧바로 `references/phase-3-self-heal.md` 의 절차로 진입해 테스트를 실행하고 자가 복구 루프를 돌린다.
 
 Phase 3 진입 시 인자:
 - 대상 테스트 파일: 방금 생성한 `{시나리오}.spec.ts`
 - 컨텍스트: 자연어 입력, 생성된 파일 목록
+- 상태: 생성 직후 첫 진입임 (Step 4.5 사전 필터·정적 검증 게이트 통과 상태)
 
 ---
 
@@ -193,3 +241,17 @@ test.beforeEach(async ({ setMocks }) => {
   await setMocks(setAgentCreateMocks());
 });
 ```
+
+---
+
+## Phase 3 복귀 진입 (재생성 계약)
+
+Phase 3가 3회 시도를 모두 소진하고, 누적 분류가 **TEST_BUG로 수렴**하며, 마지막 가설이 **flow 구조 자체의 문제**를 가리키는 경우, Phase 3 최종 보고의 옵션으로 "Phase 2 재생성"이 제시된다. 사용자가 이 옵션을 선택하면 Phase 2는 사용자 재입력 없이 다음을 입력으로 받아 재진입한다:
+
+| 입력 | 내용 |
+|---|---|
+| 원본 자연어 시나리오 | 최초 Phase 2 진입 시의 입력 (그대로 재사용) |
+| 이전 실패 이력 | 시도별 분류(UI_CHANGE/TEST_BUG/APP_BUG/ENV_ISSUE)·적용한 edits 요약 |
+| 마지막 가설 | Self-Healer 마지막 응답의 reasoning |
+
+**재설계 원칙**: Step 1~4를 다시 수행하되, "마지막 가설"이 지목한 접근(예: 특정 selector 조합, 특정 flow 분해 방식)은 **명시적으로 배제**하고 다른 구조로 flow를 재설계한다 — 실패한 접근을 그대로 반복하지 않는다. 재생성한 spec/flow는 Step 4.5 게이트를 다시 통과한 뒤 Step 5로 Phase 3에 재진입한다.

@@ -12,7 +12,10 @@ export class RadioGroupHelper {
     opts?: { within?: Locator },
   ): Promise<void> {
     const root = opts?.within ?? this.page;
-    const group = root.getByRole('radiogroup', { name: groupLabel });
+    // shadcn/ui 등은 role="radiogroup"; 표준 <fieldset>은 기본 role이 group.
+    // radiogroup이 있으면 그것만 쓰고, 없을 때만 group으로 폴백한다
+    // (.or() 로 둘 다 매칭하면 fieldset>radiogroup 중첩 시 strict-mode 위반).
+    const group = await this.resolveGroup(root, groupLabel);
     await expect(group).toBeVisible();
     await group.getByRole('radio', { name: optionLabel }).check();
   }
@@ -24,7 +27,15 @@ export class RadioGroupHelper {
     opts?: { within?: Locator },
   ): Promise<void> {
     const root = opts?.within ?? this.page;
-    const group = root.getByRole('radiogroup', { name: groupLabel });
+    const group = await this.resolveGroup(root, groupLabel);
     await expect(group.getByRole('radio', { name: expectedOption })).toBeChecked();
+  }
+
+  /** radiogroup role을 우선하고, 없을 때만 표준 <fieldset>(role=group)으로 폴백. */
+  private async resolveGroup(root: Page | Locator, groupLabel: string): Promise<Locator> {
+    const radiogroup = root.getByRole('radiogroup', { name: groupLabel });
+    return (await radiogroup.count()) > 0
+      ? radiogroup
+      : root.getByRole('group', { name: groupLabel });
   }
 }

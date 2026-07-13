@@ -7,13 +7,7 @@
 
 name: E2E Tests
 
-on:
-  pull_request:
-    types: [labeled]   # 'e2e' 또는 'release' 라벨 추가 시 트리거
-  workflow_dispatch:
-  # 야간 스케줄을 원하면 주석 해제 (KST 오전 7시 = UTC 22시)
-  # schedule:
-  #   - cron: '0 22 * * *'
+{{TRIGGER_BLOCK}}
 
 concurrency:
   group: e2e-${{ github.ref }}
@@ -21,16 +15,14 @@ concurrency:
 
 jobs:
   # ---------------------------------------------------------------
-  # 라벨 필터 — labeled 트리거에서 e2e/release만 통과
+  # 트리거 필터 — 선택한 트리거 조각(TRIGGER_BLOCK)과 짝을 이루는
+  # FILTER_CONDITION 값으로 게이트한다 (references/phase-4-enhance.md 4.2.2 참고).
   # ---------------------------------------------------------------
   filter:
-    if: |
-      github.event_name != 'pull_request' ||
-      github.event.label.name == 'e2e' ||
-      github.event.label.name == 'release'
+    if: {{FILTER_CONDITION}}
     runs-on: ubuntu-latest
     steps:
-      - run: echo "Passed label filter"
+      - run: echo "Passed filter"
 
   # ---------------------------------------------------------------
   # 빌드 1회 — 다른 job들이 artifact로 받아 쓴다
@@ -76,12 +68,12 @@ jobs:
           node-version: '{{NODE_VERSION}}'
           cache: '{{PACKAGE_MANAGER}}'
       - run: {{INSTALL_CMD}}
-      - run: {{PACKAGE_MANAGER}} exec playwright install --with-deps chromium
+      - run: {{PW_EXEC}} playwright install --with-deps chromium
 
       - name: Calculate Shards
         id: set-matrix
         run: |
-          TOTAL_TESTS=$({{PACKAGE_MANAGER}} test:e2e --list 2>/dev/null | grep -E '^\s*Total:' | awk '{print $2}')
+          TOTAL_TESTS=$({{PW_EXEC}} playwright test --grep-invert=@vrt --list 2>/dev/null | grep -E '^\s*Total:' | awk '{print $2}')
           if [ -z "$TOTAL_TESTS" ] || [ "$TOTAL_TESTS" -eq 0 ]; then
             TOTAL_TESTS=1
           fi
@@ -111,7 +103,7 @@ jobs:
           node-version: '{{NODE_VERSION}}'
           cache: '{{PACKAGE_MANAGER}}'
       - run: {{INSTALL_CMD}}
-      - run: {{PACKAGE_MANAGER}} exec playwright install --with-deps chromium
+      - run: {{PW_EXEC}} playwright install --with-deps chromium
 
       - uses: actions/download-artifact@v4
         with:
@@ -120,7 +112,7 @@ jobs:
 
       - name: Run Playwright Tests
         run: |
-          {{PACKAGE_MANAGER}} test:e2e \
+          {{PW_EXEC}} playwright test --grep-invert=@vrt \
             --shard=${{ matrix.shard-index }}/${{ matrix.total-shards }} \
             --reporter=blob
 
@@ -155,7 +147,7 @@ jobs:
           merge-multiple: true
           path: blob-reports
 
-      - run: {{PACKAGE_MANAGER}} exec playwright merge-reports --reporter html ./blob-reports
+      - run: {{PW_EXEC}} playwright merge-reports --reporter html ./blob-reports
 
       - uses: actions/upload-artifact@v4
         with:

@@ -41,4 +41,10 @@ export class NavigationHelper {
       await expect(breadcrumb.getByText(item)).toBeVisible();
     }
   }
+
+  /** 페이지 메인 영역(role=main)이 보이는지 검증. */
+  async expectMainVisible(opts?: { within?: Locator }): Promise<void> {
+    const root = opts?.within ?? this.page;
+    await expect(root.getByRole('main')).toBeVisible();
+  }
 }
