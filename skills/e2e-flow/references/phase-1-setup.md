@@ -184,21 +184,23 @@ e2e/.auth/
 **게이트 1 — 미치환 토큰 0건**:
 
 ```bash
-grep -r "{{" e2e playwright.config.ts
+grep -r "{{" e2e playwright.config.ts || true
 ```
 
-결과가 1건이라도 있으면 실패 — 해당 파일의 미치환 플레이스홀더를 채운 뒤 재실행한다.
+**exit code 가 아니라 stdout 출력으로 판정한다** — `grep` 은 매칭이 0건(= 미치환 토큰 없음 = 통과)일 때 exit code `1` 을 반환하므로, exit code 로 성공/실패를 가리면 정상 상태를 실패로 오인한다. `|| true` 로 exit code 를 무력화하고, **출력이 비어 있으면 통과**, 한 줄이라도 나오면 실패로 본다. 실패 시 해당 파일의 미치환 플레이스홀더를 채운 뒤 재실행한다.
 
-**게이트 2 — spec 트랜스파일 + 리스트**:
+**게이트 2 — spec 트랜스파일 + 리스트**: 로컬 playwright 바이너리를 실행한다. 실행 프리픽스는 매니저별로 다르므로 아래 표에서 감지된 매니저의 명령을 **그대로** 쓴다 (`exec` 를 무조건 붙이지 말 것 — `npx exec`/`bunx exec` 는 잘못된 명령이다):
 
-```bash
-<매니저> exec playwright test --list   # npm은 npx, bun은 bunx
-# 예시 테스트가 1개 이상 리스트되어야 한다 (이 명령이 spec 트랜스파일을 겸한다)
-```
+| 매니저 | 실행 명령 |
+|---|---|
+| pnpm | `pnpm exec playwright test --list` |
+| npm | `npx playwright test --list` |
+| yarn | `yarn exec playwright test --list` |
+| bun | `bunx playwright test --list` |
 
-`--list` 가 spec 트랜스파일을 겸하므로 컴파일 에러는 여기서 드러난다. 리스트 결과가 0개거나 에러면 실패.
+예시 테스트가 1개 이상 리스트되어야 한다 (이 명령이 spec 트랜스파일을 겸하므로 컴파일 에러가 여기서 드러난다). 리스트 결과가 0개거나 에러면 실패.
 
-**tsc --noEmit (참고용, 비차단)**: `tsc` 가 `devDependencies` 에 있으면 `<매니저> exec tsc --noEmit` 도 실행한다. 이 결과는 필수 차단 게이트가 아니다 — 이번에 새로 생성한 `e2e/` 하위 파일과 `playwright.config.ts`에서 발생한 에러만 차단 사유로 보고 원인을 수정한다. 그 외 기존 앱 코드의 타입 에러는 결과에 보고만 하고 Phase 1 완료를 막지 않는다.
+**tsc --noEmit (참고용, 비차단)**: `tsc` 가 `devDependencies` 에 있으면 위 표와 같은 프리픽스로 `tsc --noEmit` 도 실행한다 (pnpm/yarn 은 `<매니저> exec tsc --noEmit`, npm 은 `npx tsc --noEmit`, bun 은 `bunx tsc --noEmit`). 이 결과는 필수 차단 게이트가 아니다 — 이번에 새로 생성한 `e2e/` 하위 파일과 `playwright.config.ts`에서 발생한 에러만 차단 사유로 보고 원인을 수정한다. 그 외 기존 앱 코드의 타입 에러는 결과에 보고만 하고 Phase 1 완료를 막지 않는다.
 
 **if-then 판정**:
 

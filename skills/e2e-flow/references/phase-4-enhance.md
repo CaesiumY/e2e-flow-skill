@@ -118,8 +118,9 @@ test('랜딩 페이지 @vrt', async ({ page }) => {
 
 `.github/workflows/playwright.yml` 을 `assets/templates/ci/playwright-dynamic-shard.yml.tmpl` 로부터 생성. 치환 변수:
 
-- `{{PACKAGE_MANAGER}}` — pnpm/npm/yarn
-- `{{INSTALL_CMD}}` — `pnpm install --frozen-lockfile` / `npm ci` / `yarn install --frozen-lockfile`
+- `{{PACKAGE_MANAGER}}` — pnpm/npm/yarn/bun
+- `{{PW_EXEC}}` — 로컬 playwright 바이너리 실행 프리픽스. 매니저별로 다르다: pnpm → `pnpm exec`, npm → `npm exec`, yarn → `yarn exec`, **bun → `bunx`** (bun 은 `bun exec` 를 지원하지 않으므로 `bunx` 를 쓴다). `{{PACKAGE_MANAGER}} exec` 로 뭉뚱그리지 말 것.
+- `{{INSTALL_CMD}}` — `pnpm install --frozen-lockfile` / `npm ci` / `yarn install --frozen-lockfile` / `bun install --frozen-lockfile`
 - `{{BUILD_CMD}}` — `pnpm build` 등
 - `{{NODE_VERSION}}` — `20` (기본) 또는 감지값
 - `{{TRIGGER_BLOCK}}` — 템플릿의 `on:` 블록 전체(헤더 `on:` 포함)를 대체하는 자리. 4.2.1에서 받은 사용자 선택에 따라 아래 4가지 조각 중 하나를 그대로 삽입한다. 조각은 칼럼 0의 `on:`부터 시작하므로 들여쓰기를 바꾸지 말고 그대로 붙여넣을 것.

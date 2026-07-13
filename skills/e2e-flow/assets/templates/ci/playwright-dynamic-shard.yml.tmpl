@@ -68,7 +68,7 @@ jobs:
           node-version: '{{NODE_VERSION}}'
           cache: '{{PACKAGE_MANAGER}}'
       - run: {{INSTALL_CMD}}
-      - run: {{PACKAGE_MANAGER}} exec playwright install --with-deps chromium
+      - run: {{PW_EXEC}} playwright install --with-deps chromium
 
       - name: Calculate Shards
         id: set-matrix
@@ -103,7 +103,7 @@ jobs:
           node-version: '{{NODE_VERSION}}'
           cache: '{{PACKAGE_MANAGER}}'
       - run: {{INSTALL_CMD}}
-      - run: {{PACKAGE_MANAGER}} exec playwright install --with-deps chromium
+      - run: {{PW_EXEC}} playwright install --with-deps chromium
 
       - uses: actions/download-artifact@v4
         with:
@@ -147,7 +147,7 @@ jobs:
           merge-multiple: true
           path: blob-reports
 
-      - run: {{PACKAGE_MANAGER}} exec playwright merge-reports --reporter html ./blob-reports
+      - run: {{PW_EXEC}} playwright merge-reports --reporter html ./blob-reports
 
       - uses: actions/upload-artifact@v4
         with:

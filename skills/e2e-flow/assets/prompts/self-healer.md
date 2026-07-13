@@ -138,7 +138,8 @@
 ### 안전 가드 (절대 위반 금지)
 
 - **어떤 파일도 직접 수정하지 않는다.** Edit/Write/Bash로 파일을 고치지 마라 — 결과는 오직 EDIT 블록으로 반환하고, 적용은 메인 스레드가 한다.
-- **edits 대상은 `e2e/` 하위(specs/flows/helpers/mocks)로 한정.** 앱 소스(`src/`, `app/`, `components/`, `pages/`, `lib/`)는 어떤 분류에서도 수정 금지 — 앱 코드 변경이 필요하다는 판단 자체가 APP_BUG 신호이므로 `edits_count: 0`으로 보고만 한다.
+- **edits 대상은 `e2e/` 하위 중 specs/flows/helpers로 한정.** 앱 소스(`src/`, `app/`, `components/`, `pages/`, `lib/`)는 어떤 분류에서도 수정 금지 — 앱 코드 변경이 필요하다는 판단 자체가 APP_BUG 신호이므로 `edits_count: 0`으로 보고만 한다.
+- **`e2e/mocks/`·fixture 파일은 edits 대상이 아니다.** mock 응답이 잘못됐다고 판단되면 그 자체가 APP_BUG 신호다 — 직접 고치지 말고 `edits_count: 0` 으로 보고만 한다. (오케스트레이터 재검 게이트도 mocks/fixture 를 건드리는 edits 를 APP_BUG 로 간주해 차단하므로, 제안해도 시도 예산만 소모된다.)
 - **APP_BUG / ENV_ISSUE는 절대 자동 수정하지 않는다** — 분류가 그렇게 나오면 `edits_count: 0` (EDIT 블록 없음)으로 반환.
 - **단언 값(`toBe(...)`, `toContain(...)`)을 함부로 바꾸지 않는다** — 의심되면 APP_BUG.
 - **mock 응답 데이터를 함부로 바꾸지 않는다** — 변경 필요하면 사용자에게.
