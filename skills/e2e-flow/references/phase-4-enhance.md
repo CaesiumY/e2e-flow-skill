@@ -118,11 +118,13 @@ test('랜딩 페이지 @vrt', async ({ page }) => {
 
 `.github/workflows/playwright.yml` 을 `assets/templates/ci/playwright-dynamic-shard.yml.tmpl` 로부터 생성. 치환 변수:
 
-- `{{PACKAGE_MANAGER}}` — pnpm/npm/yarn/bun
-- `{{PW_EXEC}}` — 로컬 playwright 바이너리 실행 프리픽스. 매니저별로 다르다: pnpm → `pnpm exec`, npm → `npm exec`, yarn → `yarn exec`, **bun → `bunx`** (bun 은 `bun exec` 를 지원하지 않으므로 `bunx` 를 쓴다). `{{PACKAGE_MANAGER}} exec` 로 뭉뚱그리지 말 것.
-- `{{INSTALL_CMD}}` — `pnpm install --frozen-lockfile` / `npm ci` / `yarn install --frozen-lockfile` / `bun install --frozen-lockfile`
+- `{{PACKAGE_MANAGER}}` — **pnpm/npm/yarn** (이 값은 템플릿의 pnpm 셋업 조건과 `actions/setup-node` 의 `cache:` 입력에 쓰인다. `cache` 는 npm/yarn/pnpm 만 지원한다).
+- `{{PW_EXEC}}` — 로컬 playwright 바이너리 실행 프리픽스. 매니저별로 다르다: pnpm → `pnpm exec`, **npm → `npx`** (`npm exec` 는 `--with-deps`·`--reporter` 같은 뒤따르는 플래그를 npm 이 소비해 Playwright 로 전달하지 않으므로 `npx` 를 쓴다), yarn → `yarn exec`. `{{PACKAGE_MANAGER}} exec` 로 뭉뚱그리지 말 것.
+- `{{INSTALL_CMD}}` — `pnpm install --frozen-lockfile` / `npm ci` / `yarn install --frozen-lockfile`
 - `{{BUILD_CMD}}` — `pnpm build` 등
 - `{{NODE_VERSION}}` — `20` (기본) 또는 감지값
+
+> **Bun 프로젝트 주의**: 이 CI 템플릿은 `actions/setup-node` 의 `cache` (npm/yarn/pnpm 만 지원)와 pnpm 셋업만 다루므로 **bun 을 그대로 지원하지 않는다**. bun 프로젝트는 (1) 각 job 에 `oven-sh/setup-bun@v2` 스텝을 추가하고, (2) `setup-node` 의 `cache:` 입력을 제거(또는 bun 전용 캐시로 대체)하며, (3) `{{PW_EXEC}}` 를 `bunx` 로, `{{INSTALL_CMD}}` 를 `bun install --frozen-lockfile` 로 치환하는 수동 조정이 필요하다. (Phase 1·3 의 로컬 실행 명령은 bun/bunx 를 완전히 지원한다 — 이 제약은 CI 워크플로우에 한정된다.)
 - `{{TRIGGER_BLOCK}}` — 템플릿의 `on:` 블록 전체(헤더 `on:` 포함)를 대체하는 자리. 4.2.1에서 받은 사용자 선택에 따라 아래 4가지 조각 중 하나를 그대로 삽입한다. 조각은 칼럼 0의 `on:`부터 시작하므로 들여쓰기를 바꾸지 말고 그대로 붙여넣을 것.
 - `{{FILTER_CONDITION}}` — `filter` job의 `if:` 값을 대체하는 자리(한 줄 표현식 또는 `true`). **반드시 `{{TRIGGER_BLOCK}}`과 같은 선택지의 짝 값을 사용한다** — 트리거 조각만 바꾸고 이 값을 그대로 두면(또는 그 반대) 라벨 필드가 없는 이벤트에서 `filter`가 항상 skip되어 build/generate-shards-matrix까지 연쇄로 skip되고 워크플로우가 조용히 아무 것도 실행하지 않는다.
 
@@ -209,7 +211,7 @@ jobs:
 
   generate-shards-matrix:
     needs: filter
-    # {{PACKAGE_MANAGER}} run test:e2e -- --list 로 총 개수 측정
+    # {{PW_EXEC}} playwright test --grep-invert=@vrt --list 로 총 개수 측정
     # 15개당 1 shard 계산
     # outputs: matrix, shard-count
 
@@ -220,7 +222,7 @@ jobs:
         include: ${{ fromJSON(needs.generate-shards-matrix.outputs.matrix) }}
     steps:
       - actions/download-artifact (빌드 결과)
-      - {{PACKAGE_MANAGER}} run test:e2e -- --shard=${{ matrix.shard-index }}/${{ matrix.total-shards }} --reporter=blob
+      - {{PW_EXEC}} playwright test --grep-invert=@vrt --shard=${{ matrix.shard-index }}/${{ matrix.total-shards }} --reporter=blob
 
   merge-reports:
     needs: [e2e-test]

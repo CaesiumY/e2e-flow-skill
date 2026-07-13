@@ -73,7 +73,7 @@ jobs:
       - name: Calculate Shards
         id: set-matrix
         run: |
-          TOTAL_TESTS=$({{PACKAGE_MANAGER}} run test:e2e -- --list 2>/dev/null | grep -E '^\s*Total:' | awk '{print $2}')
+          TOTAL_TESTS=$({{PW_EXEC}} playwright test --grep-invert=@vrt --list 2>/dev/null | grep -E '^\s*Total:' | awk '{print $2}')
           if [ -z "$TOTAL_TESTS" ] || [ "$TOTAL_TESTS" -eq 0 ]; then
             TOTAL_TESTS=1
           fi
@@ -112,7 +112,7 @@ jobs:
 
       - name: Run Playwright Tests
         run: |
-          {{PACKAGE_MANAGER}} run test:e2e -- \
+          {{PW_EXEC}} playwright test --grep-invert=@vrt \
             --shard=${{ matrix.shard-index }}/${{ matrix.total-shards }} \
             --reporter=blob
 

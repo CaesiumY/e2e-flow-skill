@@ -160,21 +160,16 @@ grep -n "fillFields\|clickConfirm\|expectSuccess" e2e/helpers/*.ts
 
 ### (b) 트랜스파일 확인
 
-패키지 매니저는 Phase 1에서 감지된 값 사용. `tsc`가 devDependencies에 있으면 우선 사용:
+**생성한 spec/flow 파일만 범위로 삼는다.** `tsc --noEmit` 은 프로젝트 전체를 컴파일하므로 기존 앱 코드의 무관한 타입 에러까지 게이트에 걸려, 방금 생성한 E2E 파일이 멀쩡한데도 Phase 3(또는 앱 코드 수정)로 잘못 빠질 수 있다. 그래서 **Playwright `--list` 를 우선 게이트로 쓴다** — 지정한 spec 경로만 트랜스파일하고 목록화하므로 다른 파일의 에러에 오염되지 않는다. 매니저별 실행 프리픽스는 phase-3-self-heal.md Step 0 표(pnpm `pnpm exec` / npm `npx` / yarn `yarn exec` / bun `bunx`)를 따른다:
 
 ```bash
-pnpm exec tsc --noEmit
-# 또는 npx tsc --noEmit
+# 예시(pnpm): 생성한 spec 경로만 지정
+pnpm exec playwright test {생성한 spec 경로} --list   # npm은 npx, bun은 bunx
 ```
 
-없으면 Playwright `--list`로 트랜스파일만 확인 (실행 없이 목록화):
+TS 컴파일 에러(`TS####`), `SyntaxError`, `Cannot find module` 등이 이 spec 경로에서 나오면 → import 경로·시그니처를 직접 수정.
 
-```bash
-pnpm exec playwright test {생성한 spec 경로} --list
-# 또는 npx playwright test {생성한 spec 경로} --list
-```
-
-TS 컴파일 에러(`TS####`), `SyntaxError`, `Cannot find module` 등이 나오면 → import 경로·시그니처를 직접 수정.
+`tsc` 가 있으면 `tsc --noEmit` 을 **참고용(비차단)** 으로 함께 돌려도 되지만, 그 결과 중 **이번에 생성한 `e2e/` 하위 파일에서 난 에러만** 차단 사유로 본다. 그 외 기존 앱 코드의 타입 에러는 게이트를 막지 않는다.
 
 ### if-then 진행 규칙
 

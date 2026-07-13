@@ -22,7 +22,7 @@
   - 그 외 → "기타: <감지된 핵심 의존성>"
 
 #### 2. 패키지 매니저
-- 우선순위: `pnpm-lock.yaml` → pnpm, `yarn.lock` → yarn, `package-lock.json` → npm, `bun.lockb` → bun
+- 우선순위: `pnpm-lock.yaml` → pnpm, `yarn.lock` → yarn, `package-lock.json` → npm, `bun.lock`/`bun.lockb` → bun (Bun 1.2+ 는 텍스트 `bun.lock`)
 - 모두 없으면: `packageManager` 필드 확인, 그래도 없으면 "미확인 (기본 npm 가정)"
 
 #### 3. 디자인 시스템

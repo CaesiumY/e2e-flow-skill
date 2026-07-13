@@ -241,7 +241,7 @@ grep -r "{{" e2e playwright.config.ts || true
 
 SKILL.md 라우팅 표 2행("config 있음 + Helper 9종 중 일부 누락")이 진입하는 절차다. 위 Step 1~6 전체를 처음부터 다시 실행하지 않고, 아래 (a)~(f)만 이 순서로 실행한다.
 
-**(a) Codebase Analyzer 재디스패치 생략**: Step 1의 서브에이전트 호출은 하지 않는다. 패키지 매니저만 `references/phase-3-self-heal.md` Step 0의 A7 lockfile 우선순위 규칙(`pnpm-lock.yaml` → pnpm, `yarn.lock` → yarn, `package-lock.json` → npm, `bun.lockb` → bun, 없으면 `packageManager` 필드, 그래도 없으면 `npx` 폴백)으로 재확인한다.
+**(a) Codebase Analyzer 재디스패치 생략**: Step 1의 서브에이전트 호출은 하지 않는다. 패키지 매니저만 `references/phase-3-self-heal.md` Step 0의 A7 lockfile 우선순위 규칙(`pnpm-lock.yaml` → pnpm, `yarn.lock` → yarn, `package-lock.json` → npm, `bun.lock`/`bun.lockb` → bun, 없으면 `packageManager` 필드, 그래도 없으면 `npx` 폴백)으로 재확인한다.
 
 **(b) Step 3(패키지 설치) 생략**: `package.json`의 `devDependencies`에 `@playwright/test`가 있는지만 확인한다. 있으면 설치 단계를 건너뛴다. 없으면 부분 재셋업을 중단하고 Step 1부터 전체 셋업으로 전환한다(신호 2가 부분 셋업으로 오판된 경우이므로).
 
