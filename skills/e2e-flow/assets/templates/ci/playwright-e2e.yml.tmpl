@@ -78,6 +78,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_CHANGED_FILES: ${{ github.event.pull_request.changed_files }}
         run: |
           set -uo pipefail
           if ! FILES=$(gh api "repos/${REPO}/pulls/${PR_NUMBER}/files" --paginate --jq '.[].filename'); then
@@ -86,6 +87,16 @@ jobs:
             echo "api-ok=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+
+          # 이 엔드포인트는 최대 3000개까지만 돌려준다. 목록이 잘린 채로 판정하면
+          # 3000번째 뒤에 있는 소스 변경을 못 보고 skip(초록불)으로 빠질 수 있다.
+          GOT=$(printf '%s\n' "$FILES" | grep -c '[^[:space:]]' || true)
+          if [ "${PR_CHANGED_FILES:-0}" -gt "${GOT:-0}" ]; then
+            echo "::warning::변경 파일 목록이 잘렸습니다 (${GOT}/${PR_CHANGED_FILES}). 경로 기반 skip 을 건너뛰고 실행합니다."
+            echo "api-ok=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           echo "api-ok=true" >> "$GITHUB_OUTPUT"
           {
             echo 'list<<E2E_FILES_EOF'
@@ -108,7 +119,9 @@ jobs:
           # 라벨·파일명은 사용자 제어 입력이다. run: 에 ${{ }} 로 직접 보간하면
           # 스크립트 인젝션이 되므로 반드시 env 를 경유한다.
           EVENT: ${{ github.event_name }}
-          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          # 라벨명에는 쉼표가 들어갈 수 있다. join(...,',') 로 이어 붙이면 경계가 사라져
+          # 'review,e2e:skip' 이라는 단일 라벨이 'e2e:skip' 으로 오인된다 — JSON 배열로 넘긴다.
+          LABELS_JSON: ${{ toJSON(github.event.pull_request.labels.*.name) }}
           DRAFT: ${{ github.event.pull_request.draft }}
           DISPATCH_TIER: ${{ inputs.tier }}
           API_OK: ${{ steps.files.outputs.api-ok }}
@@ -117,12 +130,13 @@ jobs:
         run: |
           set -uo pipefail
 
-          # ',' 로 감싼 정확 일치. 부분 문자열 매치를 쓰면 'e2e:full-stack' 이 'e2e:full' 로 오인된다.
+          # JSON 배열 원소와의 정확 일치. 구분자 방식은 두 가지를 다 놓친다 —
+          # 부분 문자열 매치는 'e2e:full-stack' 을, 쉼표 결합은 쉼표가 든 라벨명을 오인한다.
           has_label() {
-            case ",${LABELS}," in
-              *",$1,"*) return 0 ;;
-              *) return 1 ;;
+            case "$LABELS_JSON" in
+              ''|null) return 1 ;;
             esac
+            printf '%s' "$LABELS_JSON" | jq -e --arg l "$1" 'any(.[]; . == $l)' >/dev/null 2>&1
           }
 
           # --- 경로 관련성 판정 (PR + API 성공일 때만) ---
@@ -552,6 +566,8 @@ jobs:
 #    continue-on-error: true
 #    steps:
 #      - uses: actions/checkout@v4
+#      - uses: pnpm/action-setup@v4
+#        if: env.PACKAGE_MANAGER == 'pnpm'
 #      - uses: actions/setup-node@v4
 #        with:
 #          node-version: '{{NODE_VERSION}}'
@@ -562,7 +578,9 @@ jobs:
 #        with:
 #          name: e2e-build
 #          path: .
-#      - run: {{PW_EXEC}} playwright test --grep @vrt --pass-with-no-tests
+#      # CI 에서 config 의 기본 reporter 는 blob 이라 playwright-report 가 생기지 않는다.
+#      # 아래 업로드가 집을 수 있도록 여기서 html 로 덮어쓴다.
+#      - run: {{PW_EXEC}} playwright test --grep @vrt --pass-with-no-tests --reporter=html
 #      - uses: actions/upload-artifact@v4
 #        if: ${{ !cancelled() }}
 #        with:

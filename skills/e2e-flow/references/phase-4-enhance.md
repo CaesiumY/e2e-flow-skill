@@ -114,7 +114,30 @@ test('랜딩 페이지', { tag: ['@vrt'] }, async ({ page }) => {
 매 PR마다 전체 E2E를 돌리면 러너 비용이 선형으로 는다. 이 절차는 **"무엇이 바뀌었고 어디로
 가는 PR인가"에 따라 실행 범위를 나누는** 워크플로우를 생성한다.
 
-### 4.2.0 선행 조건 — config의 CI 서버 기동 확인 (건너뛰지 말 것)
+### 4.2.0 선행 조건 3가지 (건너뛰지 말 것)
+
+하나라도 어긋나면 워크플로우가 **첫 실행부터 실패**하고, `E2E Gate` 가 빨간불이라 모든 PR 이 막힌다.
+셋 다 확인한 뒤에 4.2.1 로 넘어간다.
+
+#### (1) Playwright 1.42 이상 — 이 워크플로우의 하드 요구
+
+```bash
+node -p "require('@playwright/test/package.json').version"
+```
+
+**1.42 미만이면 이 워크플로우를 생성하지 않는다.** 템플릿의 개수 측정·실행 스텝이
+`--pass-with-no-tests` (1.42 도입)를 쓰는데, 하위 버전은 이 옵션을 모르는 채로 종료해
+build job 이 테스트를 한 줄도 돌리기 전에 죽는다.
+
+Phase 1 Step 3 의 태그 폴백(제목 임베드)은 **Phase 1~3 에만 적용된다** — spec 문법을 낮출 수는
+있어도 CLI 플래그를 되돌릴 수는 없기 때문이다. 1.42 미만 프로젝트에는 다음 중 하나를 안내한다:
+
+| 선택 | 조치 |
+|---|---|
+| **권장** — 업그레이드 | `@playwright/test` 를 1.42+ 로 올린 뒤 이 절차를 다시 실행 |
+| 업그레이드 불가 | 티어링 CI 대신 단일 job 워크플로우를 손으로 작성하도록 안내한다. 이때 0-매칭 안전장치(4.2.5)를 쓸 수 없으므로 `--grep` 기반 티어 분할도 함께 포기해야 한다 |
+
+#### (2) config 의 CI 서버 기동
 
 워크플로우는 빌드 산출물만 내려받고 **앱 서버를 직접 띄우지 않는다**. 서버는
 `playwright.config.ts` 의 `webServer` 가 띄운다. 따라서 CI를 붙이기 전에 config를 확인한다:
@@ -129,7 +152,7 @@ grep -n "USE_LOCAL_SERVER\|webServer" playwright.config.ts
 갱신하고, `{{START_CMD}}` 는 `references/phase-1-setup.md` Step 4의 **START_CMD 포트 규칙 표**를
 따라 확정한다 (프레임워크 기본 포트를 믿지 말 것 — 그 표가 단일 출처다).
 
-### 4.2.0-b 선행 조건 — pnpm 프로젝트의 `packageManager` 필드
+#### (3) pnpm 프로젝트의 `packageManager` 필드
 
 `{{PACKAGE_MANAGER}}` 가 **pnpm** 일 때만 해당한다. 템플릿은 `pnpm/action-setup@v4` 를 `version`
 입력 없이 쓰는데, 이 액션은 `version` 입력이나 `package.json` 의 `packageManager` 필드 중 하나를
