@@ -14,7 +14,7 @@
 ### Added
 - **테스트 태그 규약** (`SKILL.md` 신설 절, 단일 출처) — `@smoke`(도메인당 1개, 전체 5개 이하) / `@critical`(결제·인증·주문·권한·삭제) / 무태그(일반 회귀) / `@vrt`(CI 전 티어에서 제외). Playwright 1.42+ 의 `{ tag: [...] }` 옵션 사용, 미만 버전은 제목 임베드로 폴백
 - **6티어 CI 실행 예산** (`playwright-e2e.yml.tmpl` 신규) — `skip`/`smoke`/`scoped`/`critical`/`full`/`nightly`. 티어별로 shard 밀도·상한·`--project`·`timeout-minutes` 를 다르게 잡는다. smoke 는 shard 1 고정(job 오버헤드 > 실행 시간), nightly 는 밀도 40·상한 3(시간 무관, 비용 우선)으로 **정반대 방향** 최적화
-- **`e2e:full` / `e2e:skip` 라벨 체계** — 명시적 라벨이 암묵 판정(draft·경로)보다 우선. 라벨 판정은 `github.event.pull_request.labels.*.name`(현재 상태)로 하고, `,` 로 감싼 정확 일치로 비교 (`e2e:full-stack` 오매치 차단)
+- **`e2e:full` / `e2e:skip` 라벨 체계** — 명시적 라벨이 암묵 판정(draft·경로)보다 우선. 라벨 판정은 `github.event.pull_request.labels.*.name`(현재 상태)를 `toJSON` 으로 받아 배열 원소 정확 일치로 비교 — 부분 문자열 오매치(`e2e:full-stack`)와 쉼표가 든 라벨명을 모두 차단
 - **경로 기반 자동 skip** — `gh api .../pulls/{n}/files` 로 변경 파일을 받아 `{{SKIP_PATHS_REGEX}}` 와 대조. API 실패 시 실행하는 쪽으로 폴백하되 `::warning::` 을 남겨 기능이 조용히 무력화되지 않게 함
 - **`E2E Gate` job** — shard 개수가 동적이라 개별 job 을 required check 로 걸 수 없는 문제 해소. branch protection 에 이 이름 하나만 등록한다. `"skipped = 성공"` 은 tier=skip 또는 total=0 일 때만 허용
 - **0-매칭 자동 승격** — `@smoke` 가 0개 매칭되면 `full` 로 승격 + 경고. "아무것도 안 돌았는데 초록불"을 막는 안전장치
@@ -65,7 +65,7 @@
 6. **`E2E_BASE_URL` 의미 변경 주의** — 이제 이 값이 있으면 "외부 환경을 대상으로 하니 로컬 서버를 띄우지 말라"는 뜻이다. 로컬 포트만 바꾸던 용도로 쓰고 있었다면 config 의 기본값을 고치는 방식으로 옮긴다
 
 ### Notes
-- 검증: 티어 결정 스크립트를 템플릿에서 추출해 22개 케이스로 단위 검증 (라벨 우선순위, 부분 문자열 오매치, 빈 env, 도메인 스코프 6종). 렌더링 후 YAML 파싱. 상세는 [VERIFICATION.md](./VERIFICATION.md)
+- 검증: 템플릿에서 실제 스크립트를 추출해 단위 검증 — 티어 결정 31 케이스(출력 + 종료 코드 동시 단언, 라벨 경계·jq 부재·도메인 스코프 포함), 0매칭 승격·Gate 진리표 16, config 분기 15. 렌더링 후 YAML 파싱, 토큰 교차검증, 인젝션·종료코드·표 무결성 감사. 상세와 **미검증 항목**은 [VERIFICATION.md](./VERIFICATION.md)
 - 4분류 체계(UI_CHANGE/TEST_BUG/APP_BUG/ENV_ISSUE)와 Helper 9종은 이번 변경과 무관하게 그대로다
 
 ## [0.4.0] - 2026-07-13
