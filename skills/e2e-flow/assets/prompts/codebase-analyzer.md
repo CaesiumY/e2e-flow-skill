@@ -10,7 +10,7 @@
 
 ### 수집 항목
 
-다음 7가지를 순서대로 확인하세요. 발견되지 않으면 "미확인"으로 보고합니다.
+다음 8가지를 순서대로 확인하세요. 발견되지 않으면 "미확인"으로 보고합니다.
 
 #### 1. 프레임워크
 - `package.json` 의 `dependencies` / `devDependencies` 키워드 확인:
@@ -56,6 +56,12 @@
 - `package.json` 의 `scripts.dev` 또는 `scripts.start` 확인
 - 포트 흔적 (있으면) — `next dev -p 3000`, `vite --port 5173` 등
 
+#### 8. 프로덕션 빌드 기동 명령
+- `package.json` 의 `scripts.start` / `scripts.preview` / `scripts.serve` 원문
+- 그 명령에 명시된 포트 (없으면 "미지정")
+- 개발 서버 포트와 다를 수 있다는 점에 주의 — 예: `vite` 는 dev 5173, `vite preview` 는 4173.
+  **추정하지 말고 스크립트에 적힌 그대로** 보고한다 (포트를 맞추는 것은 메인 스레드의 일이다).
+
 ### 출력 형식
 
 ```yaml
@@ -68,6 +74,7 @@ existing_tests:
   e2e: <playwright/cypress/없음>
 env_files: <발견된 .env* 파일 목록>
 dev_command: <scripts.dev 또는 scripts.start>
+start_command: <scripts.start/preview/serve 원문 + 명시된 포트, 예: "next start (포트 미지정)">
 base_url_hint: <포트가 명시되어 있으면 추론한 URL, 예: "http://localhost:3000">
 notes: |
   <메인 스레드에 알려줄 특이사항 한두 줄.
@@ -83,6 +90,6 @@ notes: |
 
 ### 종료 조건
 
-7가지 항목을 모두 보고하면 즉시 종료. 추가 질문이나 액션 제안은 하지 않음 — 메인 스레드가 이후 단계를 결정합니다.
+8가지 항목을 모두 보고하면 즉시 종료. 추가 질문이나 액션 제안은 하지 않음 — 메인 스레드가 이후 단계를 결정합니다.
 
 형식(위 YAML 필드)을 이탈하면 메인 스레드가 동일 프롬프트로 **1회** 재요청하며, 형식 외 응답은 폐기됩니다.

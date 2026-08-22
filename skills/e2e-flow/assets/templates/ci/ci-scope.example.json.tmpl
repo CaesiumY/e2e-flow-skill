@@ -1,0 +1,31 @@
+{
+  "//": "e2e/ci-scope.json — 선택 기능. 이 파일이 있어야만 도메인 스코프 실행이 켜진다.",
+  "//1": "PR 기본 티어(smoke)를 '변경 영향 도메인 전체'로 넓히는 용도다.",
+  "//2": "e2e:full 라벨은 명시 의사이므로 이 매핑을 무시하고 항상 전체를 돌린다.",
+  "//3": "도메인 키는 e2e/tests/{도메인}/ 디렉터리명과 정확히 일치해야 한다.",
+  "//4": "키 문자셋은 영숫자와 . _ - 만 허용된다 (그 외는 무시되고 경고가 남는다).",
+
+  "//fallback": "매칭 도메인이 0개일 때의 티어. full | smoke. 매핑이 성숙하기 전에는 smoke 를 권장한다 — full 로 두면 매핑 안 된 PR 이 전부 전체 스위트를 돌려 오히려 비용이 는다.",
+  "fallback": "smoke",
+
+  "//always": "여기 걸리면 스코프를 적용하지 않고 곧바로 full 로 간다. 공용 컴포넌트·설정·Helper 처럼 영향 범위를 좁힐 수 없는 경로를 넣는다.",
+  "always": [
+    "src/components/ui/**",
+    "package.json",
+    "playwright.config.ts",
+    "e2e/helpers/**",
+    "e2e/fixtures.ts"
+  ],
+
+  "//domains": "소스 경로 -> e2e 도메인 매핑. 글롭은 * ? ** 를 쓰며, '*' 가 '/' 를 가로질러 매치되므로 항상 넓게(= 더 많이 실행되는 쪽) 판정된다.",
+  "domains": {
+    "checkout": [
+      "src/app/checkout/**",
+      "src/features/cart/**"
+    ],
+    "auth": [
+      "src/app/(auth)/**",
+      "src/lib/auth/**"
+    ]
+  }
+}

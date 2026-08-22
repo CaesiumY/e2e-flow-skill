@@ -5,12 +5,20 @@ import { defineConfig, devices } from '@playwright/test';
 
 const BASE_URL = process.env.E2E_BASE_URL ?? '{{BASE_URL}}';
 
+// E2E_BASE_URL 을 주면 외부 환경(스테이징 등)을 대상으로 보고 로컬 서버를 띄우지 않는다.
+// 로컬에서 포트만 바꾸고 싶다면 E2E_BASE_URL 이 아니라 위 기본값을 고친다.
+const USE_LOCAL_SERVER = !process.env.E2E_BASE_URL;
+
+// CI 기본 2 워커. flaky 가 늘면 워크플로우에서 E2E_WORKERS=1 로 되돌린다.
+// (Number('') 는 0 이 되므로 parseInt + || 로 받는다)
+const CI_WORKERS = parseInt(process.env.E2E_WORKERS ?? '', 10) || 2;
+
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  workers: process.env.CI ? CI_WORKERS : undefined,
   reporter: process.env.CI ? [['blob'], ['list']] : 'list',
 
   use: {
@@ -38,20 +46,27 @@ export default defineConfig({
       name: 'chromium-desktop',
       use: { ...devices['Desktop Chrome'] },
     },
-    // 모바일 분기가 필요하면 주석 해제
+    // 모바일 분기가 필요하면 주석 해제.
+    // CI 에서는 nightly 티어만 --project 를 지정하지 않으므로, 켜는 즉시 야간에만 자동 포함된다.
     // {
     //   name: 'chromium-mobile',
     //   use: { ...devices['Pixel 7'] },
     // },
   ],
 
-  // 로컬 개발 서버 자동 기동 — 필요 없으면 webServer 블록 제거
-  webServer: process.env.CI
-    ? undefined
-    : {
-        command: '{{PACKAGE_MANAGER}} run dev',
+  // 개발 서버 자동 기동. CI 에서도 반드시 필요하다 — 워크플로우는 빌드 산출물만 내려받고
+  // 서버를 직접 띄우지 않으므로, 이 블록이 없으면 모든 테스트가 ERR_CONNECTION_REFUSED 로 실패한다.
+  //
+  // {{START_CMD}} 는 프로덕션 빌드를 BASE_URL 과 '같은 포트'에 명시적으로 바인딩해야 한다.
+  // 프레임워크 기본 포트를 믿지 말 것 (예: vite dev 는 5173, vite preview 는 4173).
+  webServer: USE_LOCAL_SERVER
+    ? {
+        command: process.env.CI ? '{{START_CMD}}' : '{{PACKAGE_MANAGER}} run dev',
         url: BASE_URL,
-        reuseExistingServer: true,
+        reuseExistingServer: !process.env.CI,
         timeout: 120_000,
-      },
+        stdout: 'pipe',
+        stderr: 'pipe',
+      }
+    : undefined,
 });

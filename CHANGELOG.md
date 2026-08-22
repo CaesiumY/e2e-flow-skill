@@ -7,6 +7,62 @@
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-23
+
+**티어링 기반 CI 실행 예산** minor 릴리스. Phase 4.2를 "트리거 4지선다"에서 **"실행 예산 설계"** 로 승격하고, CI 워크플로우가 실제로 통과할 수 없던 결함들을 함께 해소했다. **Backward-compatible** — 기존 spec/flow 코드는 그대로 동작하며, 이미 생성된 워크플로우 파일도 자동으로 바뀌지 않는다 (아래 마이그레이션 참조).
+
+### Added
+- **테스트 태그 규약** (`SKILL.md` 신설 절, 단일 출처) — `@smoke`(도메인당 1개, 전체 5개 이하) / `@critical`(결제·인증·주문·권한·삭제) / 무태그(일반 회귀) / `@vrt`(CI 전 티어에서 제외). Playwright 1.42+ 의 `{ tag: [...] }` 옵션 사용, 미만 버전은 제목 임베드로 폴백
+- **6티어 CI 실행 예산** (`playwright-e2e.yml.tmpl` 신규) — `skip`/`smoke`/`scoped`/`critical`/`full`/`nightly`. 티어별로 shard 밀도·상한·`--project`·`timeout-minutes` 를 다르게 잡는다. smoke 는 shard 1 고정(job 오버헤드 > 실행 시간), nightly 는 밀도 40·상한 3(시간 무관, 비용 우선)으로 **정반대 방향** 최적화
+- **`e2e:full` / `e2e:skip` 라벨 체계** — 명시적 라벨이 암묵 판정(draft·경로)보다 우선. 라벨 판정은 `github.event.pull_request.labels.*.name`(현재 상태)로 하고, `,` 로 감싼 정확 일치로 비교 (`e2e:full-stack` 오매치 차단)
+- **경로 기반 자동 skip** — `gh api .../pulls/{n}/files` 로 변경 파일을 받아 `{{SKIP_PATHS_REGEX}}` 와 대조. API 실패 시 실행하는 쪽으로 폴백하되 `::warning::` 을 남겨 기능이 조용히 무력화되지 않게 함
+- **`E2E Gate` job** — shard 개수가 동적이라 개별 job 을 required check 로 걸 수 없는 문제 해소. branch protection 에 이 이름 하나만 등록한다. `"skipped = 성공"` 은 tier=skip 또는 total=0 일 때만 허용
+- **0-매칭 자동 승격** — `@smoke` 가 0개 매칭되면 `full` 로 승격 + 경고. "아무것도 안 돌았는데 초록불"을 막는 안전장치
+- **도메인 스코프 실행** (선택 기능, `ci-scope.example.json.tmpl` 신규) — `e2e/ci-scope.json` 이 있을 때만 동작. PR 기본 티어를 *넓히는* 방향이며 `e2e:full` 은 절대 좁히지 않는다. `always` 경로 변경·0 매칭은 전부 넓은 쪽으로 폴백
+- **Playwright 브라우저 캐시** — 키를 lockfile 해시가 아니라 Playwright 버전으로 잡아 무관한 의존성 변경에 캐시가 깨지지 않게 함. `build` job 이 채우고 모든 shard 가 히트
+- `package.json` 스크립트 `test:e2e:smoke` / `test:e2e:critical` — CI 티어와 같은 범위를 로컬에서 재현
+- Codebase Analyzer 수집 항목 8번 + `start_command` 필드 — CI 서버 기동 명령의 근거
+- `CONTRIBUTING.md` 체크리스트 6번 "CI 워크플로우 템플릿 변경" — 게이팅 회귀가 조용히 통과하는 것을 막는 항목들
+
+### Changed
+- **Phase 2 태그 판정 규칙** — 재량이 아니라 키워드 기반 판정 (결제/인증/주문/권한/삭제 → `@critical`). `@smoke` 는 도메인에 아직 없고 정상 경로일 때만, 전체 5개 초과 시 `AskUserQuestion`. 판정 근거를 보고에 1줄 남긴다
+- **`workers`** `1` → `2` (`E2E_WORKERS` env 로 오버라이드). `parseInt(... ) || 2` 로 받는다 — `Number('')` 는 0 이 되어 워커 0 이 된다
+- **`concurrency` 그룹에 `event_name` 포함** — 기본 브랜치 push 와 schedule 이 같은 그룹을 공유해 서로 큐잉되던 문제. `cancel-in-progress` 는 PR 에서만 true (push·schedule 은 회귀 이력이므로 보존)
+- **개수 측정 job 을 `build` 에 흡수** — 별도 job 은 checkout+install(~1분)을 중복하면서 `--list` 10초를 얻는 거래였다. run 당 job 1개 절감
+- build artifact 에서 `.next/cache` 제외 (수십~수백 MB)
+- `README.md` 요구사항 **Playwright 1.40+ → 1.42+** (`{ tag: [...] }`, `--pass-with-no-tests` 도입 버전)
+- Phase 1 Step 3 에 `@playwright/test` 버전 하한 확인 절차 추가
+- 예시 spec(`spec.example.ts.tmpl`)에 `@smoke` 부여 — 최소 1개를 보장해 매 PR 전체 승격을 방지
+- 야간 VRT job 은 **주석 블록으로만** 제공 — 스냅샷 파일명의 플랫폼 접미사(`-linux.png`) 때문에 로컬 베이스라인은 러너에서 전부 "missing snapshot" 이 되어 매일 실패하는 job 이 된다. Linux 베이스라인 생성 명령을 주석에 안내
+
+### Fixed
+- **CI 에서 앱 서버가 기동되지 않던 결함** — `playwright.config.ts` 가 `webServer: CI ? undefined` 였고 워크플로우에도 서버 기동 스텝·`E2E_BASE_URL` 주입이 없어, 전 테스트가 `ERR_CONNECTION_REFUSED` 로 실패하고 `retries: 2` 때문에 3배로 낭비되던 문제. `USE_LOCAL_SERVER` 분기 + `{{START_CMD}}` 도입
+- **`{{START_CMD}}` 포트 규칙 명문화** — 프레임워크 기본 포트를 믿으면 안 된다 (Vite 는 dev 5173 / `preview` 4173). BASE_URL 과 같은 포트에 명시 바인딩하는 표를 `phase-1-setup.md` Step 4 에 단일 출처로 배치
+- **라벨 트리거가 후속 push 에 반응하지 않던 문제** — `types: [labeled]` + `github.event.label.name` 조합은 라벨을 붙인 그 순간 1회만 돈다. PR 이벤트 타입 7종을 받고 현재 라벨 상태로 판정하도록 수정
+- **개수 측정 스텝이 0매칭에서 exit 1 로 죽던 문제** — `--pass-with-no-tests` 추가. 실행 스텝에도 같은 플래그를 붙여 버전 의존적 동작(`--shard` 유무에 따른 exit code 차이)에 기대지 않게 함
+- **변경 파일 목록이 비었을 때 skip 으로 빠지던 문제** — `grep -v` 파이프라인이 빈 입력을 "매치 없음"으로 반환해 `RELEVANT=false` → skip → gate green 으로 흘렀다. 빈 목록을 명시적으로 "관련 있음"으로 처리
+- 개수 측정 스텝의 불필요한 `playwright install` 제거 — `--list` 는 브라우저가 필요 없다 (job 당 60~90초)
+- shard 개수 상한 도입 — 기존에는 무제한이라 테스트 300개면 러너 20대를 동시 점유했다
+
+### Migration (v0.4.x 에서 올라오는 경우)
+
+이미 `.github/workflows/playwright.yml` 을 생성한 프로젝트만 해당한다. 스킬 업데이트는 기존 파일을 덮어쓰지 않는다.
+
+1. **워크플로우 재생성** — "CI 워크플로우 다시 만들어줘" 로 Phase 4.2 재실행 (기존 파일은 백업 후 교체)
+2. **라벨 교체** — `e2e` / `release` → `e2e:full` / `e2e:skip`
+   ```bash
+   gh label create "e2e:full" --description "이 PR 에서 E2E 전체 스위트 실행" --color 0E8A16
+   gh label create "e2e:skip" --description "이 PR 에서 E2E 건너뛰기" --color C5DEF5
+   ```
+3. **branch protection** — required check 를 `E2E Gate` 로 변경
+4. **`playwright.config.ts` 갱신** — `webServer` 가 `CI ? undefined` 형태면 반드시 교체한다 (그대로 두면 CI 에서 전 테스트가 실패한다)
+5. **기존 spec 에 태그 부여** — `@smoke` 가 하나도 없으면 매 PR 이 전체 스위트로 승격되어 비용 절감이 없다
+6. **`E2E_BASE_URL` 의미 변경 주의** — 이제 이 값이 있으면 "외부 환경을 대상으로 하니 로컬 서버를 띄우지 말라"는 뜻이다. 로컬 포트만 바꾸던 용도로 쓰고 있었다면 config 의 기본값을 고치는 방식으로 옮긴다
+
+### Notes
+- 검증: 티어 결정 스크립트를 템플릿에서 추출해 22개 케이스로 단위 검증 (라벨 우선순위, 부분 문자열 오매치, 빈 env, 도메인 스코프 6종). 렌더링 후 YAML 파싱. 상세는 [VERIFICATION.md](./VERIFICATION.md)
+- 4분류 체계(UI_CHANGE/TEST_BUG/APP_BUG/ENV_ISSUE)와 Helper 9종은 이번 변경과 무관하게 그대로다
+
 ## [0.4.0] - 2026-07-13
 
 **Opus 오케스트레이터 실행 준비 + 서브에이전트 모델 티어링** minor 릴리스. 7차원 병렬 감사(원시 58건 → 적대적 검증 확정 35건)와 6방향 재검증(확정 23건)으로 식별된 개선을 반영. 핵심 방향: 재량 표현을 명시적 판정 규칙으로, 암묵 계약을 검증 게이트로, 서브에이전트를 하위 모델 티어로. **Backward-compatible** — 기존 spec/flow 코드 그대로 동작.
@@ -122,7 +178,8 @@ v0.2.0 통합 검증([VERIFICATION.md](./VERIFICATION.md))에서 발견한 3가�
 ### Changed
 - 벤더 종속성 표기 정확화 — *자동 파이프라인은 Claude Code에서 검증되었지만, Helper·Selector 규칙·specs/flows 구조·CI 워크플로우 등 콘셉트와 산출물은 벤더 중립* 비대칭을 README와 install 스크립트에 일관 반영
 
-[Unreleased]: https://github.com/CaesiumY/e2e-flow-skill/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/CaesiumY/e2e-flow-skill/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/CaesiumY/e2e-flow-skill/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/CaesiumY/e2e-flow-skill/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/CaesiumY/e2e-flow-skill/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/CaesiumY/e2e-flow-skill/compare/v0.2.0...v0.2.1

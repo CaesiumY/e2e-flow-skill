@@ -76,7 +76,7 @@ Select-String '^version:' "$env:USERPROFILE\.claude\skills\e2e-flow\SKILL.md"
 - **"Playwright 셋업해줘"** → 인프라 셋업 (Phase 1)
 - **"이 페이지 테스트 만들어줘"** → 자연어 → 코드 변환 (Phase 2)
 - **"테스트 깨졌어 고쳐줘"** → 자가 복구 루프 (Phase 3)
-- **"VRT 붙여줘"** / **"E2E CI 워크플로우 추가해줘"** → 확장 (Phase 4)
+- **"VRT 붙여줘"** / **"E2E CI 워크플로우 추가해줘"** / **"CI 비용 줄여줘"** → 확장 (Phase 4)
 
 스킬이 현재 프로젝트 상태(`playwright.config.*`, `e2e/helpers/`, 기존 테스트 수)를 자동 감지해 어느 페이즈로 들어갈지 결정합니다. **한 진입점, 자동 라우팅** 이 핵심입니다.
 
@@ -130,7 +130,7 @@ UI가 변경되면 (예: 버튼 텍스트 `'저장'` → `'등록'`) **Helper �
 | **1. 인프라 셋업** | `playwright.config.*` 없음 / "셋업해줘" | **Codebase Analyzer** (Explore, 1회) | Playwright 설정, Helper 9종, Fixture 자동주입, Mock 핸들러, 예시 spec/flow, AI 가이드 문서, `AGENTS.md`, `package.json` 스크립트 |
 | **2. 테스트 생성** | 자연어 시나리오 입력 | — (메인 스레드) | `*.spec.ts` + `*-flows.ts` (+ mocks). 즉시 Phase 3 자동 연계 |
 | **3. 자가 복구** | 테스트 실패 / "고쳐줘" | **Self-Healer** (general-purpose, 매 루프) | 분류된 패치 적용 또는 안전 보고. 최대 3회 |
-| **4. 확장** | "VRT" / "CI" / "병렬화" / "shard" | — (메인 스레드) | `vrt.ts` 헬퍼, Dynamic Shard CI 워크플로우 |
+| **4. 확장** | "VRT" / "CI" / "병렬화" / "shard" / "티어" / "라벨" | — (메인 스레드) | `vrt.ts` 헬퍼, 티어링 CI 워크플로우, 도메인 스코프 |
 
 ---
 
@@ -215,7 +215,9 @@ e2e-flow-skill/
             │   ├── spec.example.ts.tmpl
             │   ├── flows.example.ts.tmpl
             │   ├── helpers/{Dialog,Form,Select,Table,Navigation,Toast,Checkbox,RadioGroup,FileUpload}Helper.ts.tmpl
-            │   └── ci/playwright-dynamic-shard.yml.tmpl
+            │   └── ci/
+            │       ├── playwright-e2e.yml.tmpl
+            │       └── ci-scope.example.json.tmpl
             └── prompts/              ← 서브에이전트 프롬프트
                 ├── codebase-analyzer.md
                 └── self-healer.md
@@ -229,7 +231,7 @@ e2e-flow-skill/
 
 - **Skill 형식을 지원하는 AI 코딩 에이전트** (Claude Code에서 검증; 다른 호환 도구는 어댑터 작업이 필요할 수 있음)
 - 대상 프로젝트: **Node.js**, 패키지 매니저 무관 (pnpm / npm / yarn / bun 자동 감지)
-- **Playwright 1.40+** 권장 (Fixture, trace, `getByRole` 등 사용)
+- **Playwright 1.42+** 필요 (`{ tag: [...] }` 테스트 태그, `--pass-with-no-tests`. 1.40~1.41 은 태그를 제목 임베드 방식으로 낮춰 쓰면 동작)
 - **Git** 권장 (자가 복구 패치 적용 전후 diff 확인 용이)
 
 자세한 호스트 호환성과 설치 경로는 아래 [호스트 도구 호환성](#호스트-도구-호환성) 섹션을 참조하세요.
@@ -264,7 +266,8 @@ e2e-flow-skill/
 | 실패 분류 기준 | `skills/e2e-flow/references/failure-classification.md` |
 | 페이즈 1 산출물 템플릿 | `skills/e2e-flow/assets/templates/*.tmpl` |
 | 서브에이전트 프롬프트 | `skills/e2e-flow/assets/prompts/` |
-| CI 워크플로우 | `skills/e2e-flow/assets/templates/ci/playwright-dynamic-shard.yml.tmpl` |
+| CI 워크플로우 | `skills/e2e-flow/assets/templates/ci/playwright-e2e.yml.tmpl` |
+| CI 도메인 스코프 (선택) | `skills/e2e-flow/assets/templates/ci/ci-scope.example.json.tmpl` |
 
 스킬은 단일 출처(SoT) 구조라 규칙을 한 곳만 고쳐도 전 페이즈에 일관되게 반영됩니다.
 
@@ -273,6 +276,19 @@ e2e-flow-skill/
 ## 한계와 운영 가이드
 
 - **VRT는 CI 게이트로 강제하지 않습니다.** OS·브라우저 렌더링 차이가 false-positive를 만들어 의미 있는 변화도 묻히기 때문. 로컬에서 `pnpm test:vrt` 로 검토용으로만 사용합니다.
+- **CI는 매 PR마다 전체를 돌리지 않습니다.** 무엇이 바뀌었고 어디로 가는 PR인지에 따라 실행 범위를 나눕니다:
+
+  | 티어 | 진입 | 실행 범위 |
+  |---|---|---|
+  | `skip` | `e2e:skip` 라벨 / draft PR / 문서만 변경 | 없음 |
+  | `smoke` | **PR 기본값** | `@smoke` 만 (shard 1, ~3분) |
+  | `scoped` | `e2e/ci-scope.json` 매칭 (선택 기능) | 변경 영향 도메인 |
+  | `critical` | 기본 브랜치 push / merge queue | `@smoke` + `@critical` |
+  | `full` | `e2e:full` 라벨 | 전체 |
+  | `nightly` | 스케줄 | 전체 + config 의 모든 project |
+
+  branch protection 에는 **`E2E Gate` 하나만** required check 로 등록합니다 (shard 개수가 동적이라 개별 job 이름을 걸 수 없습니다).
+- **`@smoke` 태그가 하나도 없으면 매 PR이 전체 스위트로 승격됩니다.** "아무것도 안 돌았는데 초록불" 을 막기 위한 의도된 동작입니다 — 비용 절감은 태그 부여가 전제입니다.
 - **자가 복구가 모든 실패를 고치진 않습니다.** APP_BUG / ENV_ISSUE는 의도적으로 수정하지 않습니다 — 앱 버그를 테스트 수정으로 덮는 것을 막기 위함.
 - **Helper는 디자인 시스템 변경에 동기화 필요**합니다. 버튼 텍스트나 ARIA 구조가 바뀌면 Helper 내부 한 줄 수정으로 전체 테스트가 복구되도록 설계되어 있습니다.
 - **자동 파이프라인의 실행은 Claude Code에서 검증되었습니다.** 서브에이전트 디스패치·도구 호출에 의존하므로, Cursor/Cline/Gemini 등 다른 AI 도구에서는 어댑터 작업이 필요할 수 있습니다 (PR 환영). 한편 *Helper 9종·Selector 우선순위·specs/flows 구조·자가 복구 분류·CI 워크플로우* 같은 **콘셉트와 산출물은 도구·팀과 무관하게** 그대로 가져다 쓸 수 있습니다 — `skills/e2e-flow/` 만 복사해서 팀 위키나 다른 AI 도구의 룰 파일에 임베드하는 것도 유효한 사용법입니다.
