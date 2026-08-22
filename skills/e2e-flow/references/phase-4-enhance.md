@@ -223,6 +223,12 @@ printf '%s\n' src/app/page.tsx README.md | grep -vE '<치환한 regex>'
 ```
 → **`src/app/page.tsx` 만 남아야 한다.**
 
+> **러너 전제**: 템플릿은 `runs-on: ubuntu-latest` 를 쓰며 **`jq` 가 설치되어 있다고 가정한다**
+> (GitHub 호스팅 러너에는 기본 탑재). 라벨 판정·도메인 스코프·shard 매트릭스 생성에 쓰인다.
+> self-hosted 러너로 바꾼다면 jq 를 먼저 설치할 것 — 없으면 `decide` / `build` job 이
+> `::error::` 와 함께 즉시 중단된다 (라벨을 조용히 무시하지 않도록 일부러 크게 실패시킨다).
+> `gh api --jq` 는 gh 내장 구현이라 별도 설치와 무관하다.
+
 > **Bun 프로젝트 주의**: 이 템플릿은 `actions/setup-node` 의 `cache` (npm/yarn/pnpm 만 지원)와
 > pnpm 셋업만 다루므로 **bun 을 그대로 지원하지 않는다**. bun 프로젝트는 (1) 각 job 에
 > `oven-sh/setup-bun@v2` 스텝을 추가하고, (2) `setup-node` 의 `cache:` 입력을 제거하며,

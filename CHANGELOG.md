@@ -40,6 +40,7 @@
 - **`{{START_CMD}}` 포트 규칙 명문화** — 프레임워크 기본 포트를 믿으면 안 된다 (Vite 는 dev 5173 / `preview` 4173). BASE_URL 과 같은 포트에 명시 바인딩하는 표를 `phase-1-setup.md` Step 4 에 단일 출처로 배치
 - **라벨 트리거가 후속 push 에 반응하지 않던 문제** — `types: [labeled]` + `github.event.label.name` 조합은 라벨을 붙인 그 순간 1회만 돈다. PR 이벤트 타입 7종을 받고 현재 라벨 상태로 판정하도록 수정
 - **개수 측정 스텝이 0매칭에서 exit 1 로 죽던 문제** — `--pass-with-no-tests` 추가. 실행 스텝에도 같은 플래그를 붙여 버전 의존적 동작(`--shard` 유무에 따른 exit code 차이)에 기대지 않게 함
+- **jq 부재 시 라벨이 조용히 무시되던 문제** — `has_label` 의 jq 호출이 stderr 까지 억제해, jq 없는 러너에서 `command not found` 가 '라벨 없음' 으로 읽혔다 (`e2e:full` 을 붙여도 smoke 만 실행). `decide`·`build` 에 `command -v jq` 가드를 추가해 크게 실패시키고, stderr 억제를 제거
 - **라벨 경계 상실** — 라벨명에 쉼표가 들어갈 수 있어 `join(...,',')` 방식은 `review,e2e:skip` 이라는 단일 라벨을 `e2e:skip` 으로 오인했다. `toJSON` + `jq` 배열 원소 일치로 교체
 - **변경 파일 목록 3000개 절단** — REST 엔드포인트 상한을 넘으면 뒤쪽 소스 변경을 못 보고 skip 으로 빠질 수 있었다. 반환 개수와 `changed_files` 를 비교해 잘렸으면 실행하는 쪽으로 폴백
 - **Playwright 1.42 요구가 Phase 4 에 강제되지 않던 문제** — 워크플로우가 `--pass-with-no-tests` 를 쓰는데 Phase 1 은 1.40~1.41 폴백을 허용해, 그 조합이면 워크플로우가 첫 실행부터 죽었다. Phase 4 에 하드 요구 선행 조건 신설
