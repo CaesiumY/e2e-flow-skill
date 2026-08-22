@@ -140,12 +140,23 @@ jobs:
 
           # JSON 배열 원소와의 정확 일치. 구분자 방식은 두 가지를 다 놓친다 —
           # 부분 문자열 매치는 'e2e:full-stack' 을, 쉼표 결합은 쉼표가 든 라벨명을 오인한다.
-          # stderr 는 죽이지 않는다 — jq 의 진짜 에러가 '라벨 없음' 으로 묻히면 안 된다.
+          #
+          # jq -e 는 '일치 없음' 에 1, '동작 실패'(파싱 오류·깨진 설치 등)에 1보다 큰 값을 낸다.
+          # 이 둘을 뭉뚱그려 non-zero = '라벨 없음' 으로 읽으면, e2e:full 을 붙였는데 smoke 만
+          # 도는 조용한 저테스트가 그대로 되살아난다. exit 1 만 음성으로 인정하고 나머지는 중단한다.
           has_label() {
             case "$LABELS_JSON" in
               ''|null) return 1 ;;
             esac
+            local rc
             printf '%s' "$LABELS_JSON" | jq -e --arg l "$1" 'any(.[]; . == $l)' >/dev/null
+            rc=$?
+            case "$rc" in
+              0) return 0 ;;
+              1) return 1 ;;
+              *) echo "::error::라벨 판정 중 jq 가 실패했습니다 (exit $rc). LABELS_JSON=$LABELS_JSON"
+                 exit 1 ;;
+            esac
           }
 
           # --- 경로 관련성 판정 (PR + API 성공일 때만) ---
