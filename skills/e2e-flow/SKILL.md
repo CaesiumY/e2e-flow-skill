@@ -1,7 +1,7 @@
 ---
 name: e2e-flow
-version: 0.4.0
-description: Playwright 기반 프론트엔드 E2E 테스트 파이프라인. 자연어 시나리오를 규칙 준수 spec/flow 코드로 변환하고, 실패 시 trace 분석으로 자가 복구한다. 사용 시점 - "E2E 테스트 추가해줘", "Playwright 셋업해줘", "이 페이지 테스트 만들어줘", "테스트가 깨졌어 고쳐줘", "VRT 붙여줘", "E2E CI 최적화해줘", "Playwright shard 설정해줘".
+version: 0.5.0
+description: Playwright 기반 프론트엔드 E2E 테스트 파이프라인. 자연어 시나리오를 규칙 준수 spec/flow 코드로 변환하고, 실패 시 trace 분석으로 자가 복구한다. 사용 시점 - "E2E 테스트 추가해줘", "Playwright 셋업해줘", "이 페이지 테스트 만들어줘", "테스트가 깨졌어 고쳐줘", "VRT 붙여줘", "E2E CI 최적화해줘", "Playwright shard 설정해줘", "PR 라벨로 E2E 실행 나눠줘", "CI 비용 줄여줘", "스모크 테스트만 돌려줘".
 ---
 
 # e2e-flow
@@ -13,7 +13,7 @@ description: Playwright 기반 프론트엔드 E2E 테스트 파이프라인. �
 - **Phase 1 — 인프라 셋업**: Playwright + Helper 9종 + Selector 규칙 + specs/flows 구조 생성
 - **Phase 2 — 테스트 생성**: 자연어 시나리오를 규칙 준수 spec/flow 코드로 변환
 - **Phase 3 — 자가 복구**: 실행 실패 시 trace를 분석해 4가지 분류 → 자동 패치 (최대 3회)
-- **Phase 4 — 확장**: VRT, Dynamic Shard CI 등 운영 단계 도구
+- **Phase 4 — 확장**: VRT, 티어링 CI(라벨·경로 기반 실행 범위 분할) 등 운영 단계 도구
 
 각 페이즈의 상세 절차는 `references/phase-N-*.md`에 분리되어 있다. 본 문서는 라우팅과 공통 규칙만 담는다.
 
@@ -28,7 +28,7 @@ description: Playwright 기반 프론트엔드 E2E 테스트 파이프라인. �
 1. **신호 1 — config 존재 여부**: Glob `playwright.config.{ts,js,mjs,cjs}` → 매치 파일 존재 여부 (인프라 셋업 완료 판정의 1차 근거)
 2. **신호 2 — Helper 셋업 상태**: Glob `e2e/helpers/*Helper.ts` → 결과 **파일명**을 화이트리스트 9종(Dialog, Form, Select, Table, Navigation, Toast, Checkbox, RadioGroup, FileUpload)과 **이름으로 대조**. 9개가 모두 존재해야 셋업 완료, 하나라도 없으면 미완료(부분 셋업). *개수가 아니라 이름 대조다.*
 3. **신호 3 — 기존 테스트 보유**: Glob `e2e/tests/**/*.spec.ts` → 매치 개수
-4. **신호 4 — 사용자 입력 키워드**: 사용자 입력 문자열에서 키워드 매칭 (셋업/추가/생성/고쳐/실패/VRT/CI/병렬화/shard). *파일 도구가 아니라 입력 텍스트 분석이다.*
+4. **신호 4 — 사용자 입력 키워드**: 사용자 입력 문자열에서 키워드 매칭 (셋업/추가/생성/고쳐/실패/VRT/CI/병렬화/shard/티어/라벨/스모크/비용). *파일 도구가 아니라 입력 텍스트 분석이다.*
 
 ### Step 2. 페이즈 라우팅
 
@@ -40,7 +40,7 @@ description: Playwright 기반 프론트엔드 E2E 테스트 파이프라인. �
 | 2 | config 있음 + Helper 9종 중 일부 누락 | **Phase 1 부분 재셋업** — 누락 Helper 생성 + `fixtures.ts` 증분 갱신 (`references/phase-1-setup.md` '부분 재셋업' 절 수행) |
 | 3 | 인프라 완비 + 자연어 시나리오 입력 | **Phase 2** (→ Phase 3 자동 연계) |
 | 4 | "테스트 깨졌어 / 고쳐줘 / 실패" 키워드 또는 실패 출력 첨부 | **Phase 3** |
-| 5 | VRT / CI / 워크플로우 / 병렬화 / shard 키워드 | **Phase 4** |
+| 5 | VRT / CI / 워크플로우 / 병렬화 / shard / 티어 / 라벨 / 스모크 / CI 비용 키워드 | **Phase 4** |
 | 6 | 어느 행에도 매치 없음 | `AskUserQuestion` 4지선다로 확인 |
 
 [^handoff]: 자연어 시나리오가 진입 시 함께 온 경우, Phase 1 완료 후 사용자 재입력 없이 그대로 Phase 2 입력으로 전달한다 (핸드오프).
@@ -54,6 +54,29 @@ description: Playwright 기반 프론트엔드 E2E 테스트 파이프라인. �
 ---
 
 ## 공통 규칙 (모든 페이즈 공유)
+
+### 테스트 태그 규약
+
+CI가 이 태그로 실행 범위를 정한다. **여기가 단일 출처다** — Phase 2 생성, Phase 4 CI, `package.json`
+스크립트가 모두 이 표를 따른다.
+
+| 태그 | 의미 | 부여 기준 | 규모 목표 |
+|---|---|---|---|
+| `@smoke` | 앱이 살아있고 최핵심 경로가 도는지 | 도메인당 최대 1개 | 전체 5개 이하 / 3분 이내 |
+| `@critical` | 실패 시 매출·인증·데이터 손실 직결 | 결제·인증·주문·권한·삭제 | 전체의 20~30% |
+| (무태그) | 일반 회귀 | 기본값 | — |
+| `@vrt` | 시각 회귀 | VRT 전용 | CI 전 티어에서 제외 |
+
+```ts
+test('로그인 성공', { tag: ['@smoke', '@critical'] }, async ({ page, form }) => { ... });
+```
+
+- 실행 범위는 `@smoke` ⊂ `@critical` 이다 (critical 티어는 `--grep "@smoke|@critical"`).
+- 부여 판정 절차는 `references/phase-2-generate.md` Step 3.1 (키워드 기반, 재량 금지).
+- `@playwright/test` **1.42 이상**이 필요하다. 미만이면 제목 임베드(`test('로그인 성공 @smoke', ...)`)로
+  낮춰 쓴다 — `--grep` 매칭 결과는 동일하다.
+- **프로젝트에 `@smoke` 가 하나도 없으면 CI가 매 PR을 전체 스위트로 승격한다** (조용한 무실행 방지).
+  비용을 줄이려면 태그를 붙이는 것이 전제다.
 
 ### Selector 우선순위
 
@@ -177,9 +200,13 @@ e2e/
 7. 소진 시 최종 보고
 
 **Phase 4 — 확장**
-1. 확장 종류 선택 (VRT / Dynamic Shard CI / 알림)
-2. 해당 템플릿 복사 + 치환
-3. 사용자에게 변경 사항과 운영 가이드 요약 출력
+1. 확장 종류 선택 (VRT / 티어링 CI / 도메인 스코프 / 알림)
+2. **CI 선택 시 선행 확인**: `playwright.config.ts` 의 `webServer` 가 CI에서도 서버를 띄우는지
+   (v0.4.0 이하 config는 `CI ? undefined` 라 전 테스트가 `ERR_CONNECTION_REFUSED` 로 실패한다 —
+   `phase-4-enhance.md` 4.2.0)
+3. 해당 템플릿 복사 + 치환
+4. 후속 설정 안내 (라벨 2개 생성 / branch protection 에 `E2E Gate` 등록 / 기존 spec 태그 부여)
+5. 사용자에게 변경 사항과 운영 가이드 요약 출력
 
 ---
 
@@ -190,7 +217,7 @@ e2e/
 | `references/phase-1-setup.md` | Phase 1 절차 (Analyzer 디스패치, 템플릿 복사, 치환 규칙) |
 | `references/phase-2-generate.md` | Phase 2 절차 (자연어 파싱, Helper 카탈로그, 패턴 학습) |
 | `references/phase-3-self-heal.md` | Phase 3 절차 (실행, Healer 오케스트레이션, 패치 적용) |
-| `references/phase-4-enhance.md` | Phase 4 절차 (VRT, Dynamic Shard CI) |
+| `references/phase-4-enhance.md` | Phase 4 절차 (VRT, 티어링 CI, 도메인 스코프) |
 | `references/helper-templates.md` | 9개 Helper 완성 코드 |
 | `references/selector-priority.md` | Selector 우선순위와 안티패턴 |
 | `references/failure-classification.md` | Self-Healer 4분류 기준 |

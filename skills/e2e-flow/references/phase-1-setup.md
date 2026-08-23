@@ -31,6 +31,7 @@ Agent({
 | `existing_tests.e2e` | playwright / cypress / 없음 |
 | `env_files` | 발견된 `.env*` 파일 목록 |
 | `dev_command` | `scripts.dev` 또는 `scripts.start` |
+| `start_command` | 프로덕션 빌드 기동 스크립트 원문 + 추정 포트 (`scripts.start` / `scripts.preview`). CI에서 서버를 띄우는 근거 |
 | `base_url_hint` | 포트에서 추론한 URL (예: `http://localhost:3000`) |
 | `notes` | 메인 스레드에 알려줄 특이사항 한두 줄 |
 
@@ -60,6 +61,27 @@ Step 3 이전에 감지된 매니저(analyzer 의 `package_manager`)로 아래 �
 | yarn | `yarn add -D @playwright/test` + `yarn exec playwright install chromium` |
 | bun | `bun add -d @playwright/test` + `bunx playwright install chromium` |
 
+**버전 하한 — `@playwright/test` 1.42 이상이어야 한다.** 이 스킬이 생성하는 spec 은
+`test('이름', { tag: ['@smoke'] }, async ...)` 시그니처를 쓰고, CI 는 `--pass-with-no-tests` 를
+쓴다. 둘 다 1.42 도입이다. 이미 `@playwright/test` 가 있는 프로젝트라면 설치 전에 확인한다:
+
+```bash
+node -p "require('@playwright/test/package.json').version"
+```
+
+1.42 미만이면 업그레이드를 제안하고, 사용자가 거부하면 태그를 제목 임베드 방식
+(`test('이름 @smoke', ...)`)으로 낮춰 생성한다 — `--grep` 매칭 결과는 동일하다.
+
+> **이 폴백으로 막히는 것은 티어링 CI 하나뿐이다.** 폴백으로 진행할 때 사용자에게 아래를 함께 알린다:
+>
+> | 이후 사용 | 1.40~1.41 |
+> |---|---|
+> | Phase 2·3 (생성 / 자가 복구) | 그대로 동작 — 생성물도 제목 임베드로 통일한다 |
+> | Phase 4.1 **VRT** | 그대로 동작 — `@vrt` 도 제목 임베드로 생성한다 (`phase-4-enhance.md` 4.0) |
+> | Phase 4.2 **티어링 CI** | **생성 불가** (`phase-4-enhance.md` 4.2.0-(1)) |
+>
+> spec 문법은 낮출 수 있어도 `--pass-with-no-tests` 같은 CLI 플래그는 되돌릴 수단이 없어서 CI 만 갈린다.
+
 사용자가 승인하면 Bash로 실행. 거부하면 "수동 실행 후 다음 단계로 진행" 안내.
 
 **설치 실패 처리**: 각 명령의 Bash exit code 를 확인한다. 0 이 아니면 즉시 중단하고, 원인(네트워크/권한/디스크)과 재시도 명령을 사용자에게 보고한 뒤 Step 4 로 넘어가지 않는다.
@@ -74,6 +96,25 @@ Step 3 이전에 감지된 매니저(analyzer 의 `package_manager`)로 아래 �
 |---|---|
 | `{{PACKAGE_MANAGER}}` | analyzer 의 `package_manager` 필드에서 직접 매핑 (pnpm / npm / yarn / bun). *주의*: `playwright.config.ts.tmpl`의 `webServer.command`는 `<매니저> run dev` 형태로 치환된다 — analyzer 의 `dev_command`가 `dev`가 아닌 다른 스크립트명(예: `start`)을 가리키면 치환 후 `command` 값을 그 스크립트명으로 수동 조정한다. |
 | `{{BASE_URL}}` | analyzer 의 `base_url_hint` 가 있으면 그대로 채택, 없을 때만 사용자 확인 (기본 `http://localhost:3000`) |
+| `{{START_CMD}}` | 프로덕션 빌드 기동 명령. **아래 포트 규칙 표**를 따른다 |
+
+#### START_CMD 포트 규칙 (단일 출처 — Phase 4도 이 표를 참조한다)
+
+**START_CMD 는 반드시 `{{BASE_URL}}` 의 포트에 명시적으로 바인딩한다.** 프레임워크 기본 포트를
+믿으면 안 된다 — 예를 들어 Vite 는 dev 가 5173, `preview` 가 **4173** 이라 `pnpm preview` 만 쓰면
+CI에서 서버는 뜨는데 테스트는 다른 포트를 두드려 `ERR_CONNECTION_REFUSED` 가 난다.
+실행 프리픽스(`<PW_EXEC>`)는 매니저별 규칙(pnpm → `pnpm exec`, npm → `npx`, yarn → `yarn exec`,
+bun → `bunx`)을 그대로 쓴다.
+
+| 프레임워크 | START_CMD (PORT = BASE_URL 의 포트) |
+|---|---|
+| Next.js | `<PW_EXEC> next start -p <PORT>` |
+| Vite | `<PW_EXEC> vite preview --port <PORT> --strictPort` |
+| CRA | `npx serve -s build -l <PORT>` (`serve` 를 devDependency 로 추가 제안) |
+| Remix / Nuxt / 기타 | analyzer 의 `start_command` 를 후보로 제시하고 `AskUserQuestion` 으로 확정. 포트 플래그가 없는 프레임워크는 `PORT=<PORT> <명령>` 형태로 env 주입 |
+
+`{{START_CMD}}` 는 `playwright.config.ts` 의 `webServer.command` 에 CI 분기로 들어간다.
+로컬 실행에는 `{{PACKAGE_MANAGER}} run dev` 가 그대로 쓰이므로 이 값은 CI 경로에만 영향을 준다.
 
 > **선택적 하위모델 위임**: 위 치환 맵(`{{PACKAGE_MANAGER}}`, `{{BASE_URL}}`)이 모두 확정되면 4.1 의 템플릿 복사·치환·쓰기를 `general-purpose`(`model: "haiku"`) 서브에이전트 1회 디스패치로 위임할 수 있다(선택). 단 **4.3 AGENTS.md marker-block 병합은 메인 스레드가 직접 수행**한다(멱등·충돌 회피 판단이 필요). 위임 후 메인이 게이트로 검증한다 — 생성 파일 개수 확인 + `grep -r "{{" e2e playwright.config.ts` 미치환 `{{}}` 0건.
 
@@ -93,9 +134,21 @@ Step 3 이전에 감지된 매니저(analyzer 의 `package_manager`)로 아래 �
 | `helpers/CheckboxHelper.ts.tmpl` | `e2e/helpers/CheckboxHelper.ts` |
 | `helpers/RadioGroupHelper.ts.tmpl` | `e2e/helpers/RadioGroupHelper.ts` |
 | `helpers/FileUploadHelper.ts.tmpl` | `e2e/helpers/FileUploadHelper.ts` |
-| `spec.example.ts.tmpl` | `e2e/tests/example/specs/landing.spec.ts` |
+| `spec.example.ts.tmpl` | `e2e/tests/example/specs/landing.spec.ts` [^tagfallback] |
 | `flows.example.ts.tmpl` | `e2e/tests/example/flows/landing-flows.ts` |
 | (빈 디렉터리) | `e2e/shared/sequences/.gitkeep` |
+
+[^tagfallback]: **Playwright 1.42 미만이면 복사 직후 태그 형태를 낮춘다.** 템플릿은 `{ tag: [...] }`
+    시그니처를 쓰는데 이는 1.42+ 전용이라, 그대로 두면 Step 5 게이트 2(`playwright test --list`)가
+    트랜스파일 단계에서 실패해 Phase 1이 완료되지 않는다. Step 3에서 확인한 버전이 1.42 미만이면
+    복사한 `landing.spec.ts`에서 아래처럼 한 줄만 바꾼다 (`--grep @smoke` 매칭 결과는 동일하다):
+
+    ```diff
+    - test('진입 시 메인 컨텐츠가 보인다', { tag: ['@smoke'] }, async ({ page, navigation }) => {
+    + test('진입 시 메인 컨텐츠가 보인다 @smoke', async ({ page, navigation }) => {
+    ```
+
+    같은 규칙이 Phase 2 생성물에도 적용된다 (`phase-2-generate.md` Step 3.1).
 
 ### 4.2 docs/ai/skills/e2e-flow-generator.md 생성
 
@@ -157,12 +210,17 @@ Step 3 이전에 감지된 매니저(analyzer 의 `package_manager`)로 아래 �
 {
   "scripts": {
 +   "test:e2e": "playwright test --grep-invert=@vrt",
++   "test:e2e:smoke": "playwright test --grep @smoke --grep-invert=@vrt",
++   "test:e2e:critical": "playwright test --grep \"@smoke|@critical\" --grep-invert=@vrt",
 +   "test:vrt": "playwright test --grep @vrt",
 +   "test:vrt-update": "playwright test --grep @vrt --update-snapshots",
 +   "test:e2e:ui": "playwright test --ui"
   }
 }
 ```
+
+`test:e2e:smoke` / `test:e2e:critical` 은 CI 티어와 같은 범위를 로컬에서 재현하기 위한 것이다
+(태그 규약은 `SKILL.md` 의 "테스트 태그 규약" 절이 단일 출처).
 
 기존 스크립트와 충돌하면 사용자에게 확인.
 

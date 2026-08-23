@@ -52,6 +52,36 @@ Phase 1 라우팅에서 보관·전달된 원본 시나리오가 있으면 그�
 - `test.describe(...)` 로 그룹화
 - 선행 동작 있으면 `beforeEach`에 sequence 호출
 - 가장 자주 쓰는 fixture만 `async ({ page, form, dialog, toast })` 로 디스트럭처링
+- **태그 부여** — 아래 판정 규칙을 따른다 (CI 티어가 이 태그로 실행 범위를 정한다)
+
+#### 태그 판정 규칙 (재량 금지)
+
+태그 규약의 단일 출처는 `SKILL.md` 의 "테스트 태그 규약" 절이다. 생성 시에는 아래 절차로만 정한다.
+
+1. **`@critical`** — 시나리오 자연어에 다음 키워드가 있으면 부여:
+   결제 / 구매 / 주문 / 정산 / 송금 / 로그인 / 인증 / 회원가입 / 권한 / 삭제 / 탈퇴
+2. **`@smoke`** — **먼저 해당 도메인(`e2e/tests/{도메인}/`)에 `@smoke` spec 이 이미 있는지 확인한다.**
+   - **이미 있으면** — 사용자가 명시했든 아니든 그냥 추가하지 않는다. 도메인당 1개가 상한이다.
+     사용자가 "스모크"·"매 PR 마다" 등으로 명시한 경우에만 `AskUserQuestion` 으로
+     "기존 `{기존 spec 이름}` 과 이번 것 중 어느 쪽이 `@smoke` 를 가질지" 물어 **교체**한다
+     (선택된 쪽에 부여하고 다른 쪽에서는 뗀다).
+   - **없으면** — 다음 둘 중 하나일 때 부여한다:
+     - (a) 사용자가 "스모크", "핵심 경로", "매 PR 마다" 등으로 명시했다
+     - (b) 이번 시나리오가 정상(happy) 경로다 — 에러·검증 실패 시나리오에는 붙이지 않는다
+3. **전체 상한 확인** — 부여 후 전체 `@smoke` 가 5개를 넘으면 `AskUserQuestion` 으로
+   "어느 것을 `@smoke` 에서 뺄지" 확인한다. smoke 티어는 3분 이내가 목표다.
+   (도메인당 1개를 지켜도 도메인이 6개 이상이면 여기서 걸린다 — 두 상한은 독립이다.)
+4. **둘 다 해당하면 둘 다 붙인다** — `{ tag: ['@smoke', '@critical'] }`
+5. **판정 근거를 Step 5 보고에 1줄로 남긴다** (예: `@critical (결제 키워드), @smoke 미부여 (checkout 도메인에 이미 있음)`)
+
+기존 `@smoke` 보유 여부는 Glob + Grep 으로 확인한다:
+
+```bash
+grep -rl "@smoke" e2e/tests/{도메인}/specs/ 2>/dev/null
+```
+
+> `@playwright/test` 가 1.42 미만이면 `{ tag: [...] }` 시그니처가 없다. 이 경우 제목 임베드
+> (`test('정상 생성 플로우 @smoke', ...)`)로 낮춰 생성한다 — `--grep` 매칭 결과는 동일하다.
 
 ```ts
 import { test } from '../../../fixtures';
@@ -63,7 +93,7 @@ test.describe('에이전트 생성', () => {
     await setMocks(setAgentCreateMocks());
   });
 
-  test('정상 생성 플로우', async ({ page, form, dialog, toast }) => {
+  test('정상 생성 플로우', { tag: ['@smoke'] }, async ({ page, form, dialog, toast }) => {
     await page.goto('/ai-agent/create');
     await 에이전트_생성_플로우({ page, form, dialog, toast });
   });
@@ -199,6 +229,7 @@ Phase 3 진입 시 인자:
 | mock 파일 | `{도메인}-mocks.ts` | `agent-mocks.ts` |
 | flow 함수명 | 한국어 가능, snake_case 권장 | `에이전트_생성_플로우`, `자격_증명_입력` |
 | test 이름 | 한국어 자연어 | `'정상 생성 플로우'` |
+| 태그 | `{ tag: [...] }` 옵션, 판정 규칙은 Step 3.1 | `{ tag: ['@smoke', '@critical'] }` |
 
 ---
 

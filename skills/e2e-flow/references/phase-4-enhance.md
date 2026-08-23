@@ -1,13 +1,33 @@
 # Phase 4 — 확장 절차
 
-VRT(시각적 회귀 테스트)와 Dynamic Shard CI를 추가하는 페이즈. **메인 스레드만 사용** (서브에이전트 불필요, 결정론적 템플릿 작업).
+VRT(시각적 회귀 테스트)와 티어링 CI를 추가하는 페이즈. **메인 스레드만 사용** (서브에이전트 불필요, 결정론적 템플릿 작업).
 
 사용자 입력 키워드:
 - "VRT", "스크린샷 테스트" → 4.1 VRT 추가
-- "CI", "워크플로우", "GitHub Actions", "병렬화", "shard" → 4.2 Dynamic Shard CI 추가
+- "CI", "워크플로우", "GitHub Actions", "병렬화", "shard", "티어", "라벨" → 4.2 티어링 CI 추가
+- "도메인만", "바뀐 것만", "스코프" → 4.4 도메인 스코프 (4.2 이후에만)
 - "Slack/Mattermost 알림" → 4.3 알림 추가 (선택)
 
 여러 키워드가 동시에 오면 차례로 모두 실행.
+
+---
+
+## 4.0 공통 선행 확인 — Playwright 버전 (라우팅보다 먼저)
+
+**어느 경로로 가든 이것부터 확인한다.** 4.1(VRT)과 4.2(CI) 모두 1.42+ 문법·플래그에 의존하므로,
+경로를 고른 뒤에 확인하면 VRT 만 요청한 사용자가 컴파일되지 않는 spec 을 받는다.
+
+```bash
+node -p "require('@playwright/test/package.json').version"
+```
+
+| 버전 | 4.1 VRT | 4.2 티어링 CI |
+|---|---|---|
+| **1.42 이상** | 그대로 진행 (`{ tag: ['@vrt'] }`) | 그대로 진행 |
+| 1.40~1.41 | 진행하되 **태그를 제목 임베드로 낮춘다** (`test('랜딩 페이지 @vrt', ...)`) — `--grep` 매칭 결과는 동일하다 | **생성하지 않는다** (4.2.0-(1) 참조). 업그레이드를 제안하고, 거부하면 CI 는 건너뛰고 나머지만 진행 |
+
+spec 문법(`tag` 옵션)은 낮출 수 있지만 CLI 플래그(`--pass-with-no-tests`)는 되돌릴 수단이 없다 —
+이것이 두 경로의 처리가 갈리는 이유다.
 
 ---
 
@@ -73,7 +93,7 @@ export async function takeVrtSnapshot(
 import { test } from '../../../fixtures';
 import { takeVrtSnapshot } from '../../../helpers/vrt';
 
-test('랜딩 페이지 @vrt', async ({ page }) => {
+test('랜딩 페이지', { tag: ['@vrt'] }, async ({ page }) => {
   await page.goto('/');
   await takeVrtSnapshot(page, 'landing', {
     mask: ['[data-dynamic="true"]'],
@@ -81,7 +101,12 @@ test('랜딩 페이지 @vrt', async ({ page }) => {
 });
 ```
 
-`@vrt` 태그가 핵심. Phase 1에서 추가된 스크립트는 이를 기준으로 VRT를 분리한다.
+`@vrt` 태그가 핵심 — CI의 **모든 티어가 `--grep-invert @vrt` 로 이 태그를 제외**한다.
+태그 규약 전체는 `SKILL.md` 의 "테스트 태그 규약" 절이 단일 출처다.
+
+> 위 `{ tag: [...] }` 형태는 **Playwright 1.42+ 전용**이다. 4.0 에서 확인한 버전이 1.40~1.41 이면
+> 제목 임베드(`test('랜딩 페이지 @vrt', async ({ page }) => {`)로 낮춰 생성한다 — `--grep` 매칭
+> 결과는 동일하다. 기존 프로젝트의 제목 임베드 spec 도 그대로 동작하므로 건드리지 않는다.
 
 ### 4.1.5 사용자 보고
 
@@ -104,178 +129,356 @@ test('랜딩 페이지 @vrt', async ({ page }) => {
 
 ---
 
-## 4.2 Dynamic Shard CI 추가
+## 4.2 티어링 CI 추가
+
+매 PR마다 전체 E2E를 돌리면 러너 비용이 선형으로 는다. 이 절차는 **"무엇이 바뀌었고 어디로
+가는 PR인가"에 따라 실행 범위를 나누는** 워크플로우를 생성한다.
+
+### 4.2.0 선행 조건 3가지 (건너뛰지 말 것)
+
+하나라도 어긋나면 워크플로우가 **첫 실행부터 실패**하고, `E2E Gate` 가 빨간불이라 모든 PR 이 막힌다.
+셋 다 확인한 뒤에 4.2.1 로 넘어간다.
+
+#### (1) Playwright 1.42 이상 — 이 워크플로우의 하드 요구
+
+```bash
+node -p "require('@playwright/test/package.json').version"
+```
+
+**1.42 미만이면 이 워크플로우를 생성하지 않는다.** 템플릿의 개수 측정·실행 스텝이
+`--pass-with-no-tests` (1.42 도입)를 쓰는데, 하위 버전은 이 옵션을 모르는 채로 종료해
+build job 이 테스트를 한 줄도 돌리기 전에 죽는다.
+
+Phase 1 Step 3 의 태그 폴백(제목 임베드)은 Phase 1~3 과 **4.1 VRT 까지 적용되지만, 이 티어링
+CI 에는 적용되지 않는다** — spec 문법은 낮출 수 있어도 CLI 플래그를 되돌릴 수는 없기 때문이다
+(4.0 의 경로별 표 참조). 1.42 미만 프로젝트에는 다음 중 하나를 안내한다:
+
+| 선택 | 조치 |
+|---|---|
+| **권장** — 업그레이드 | `@playwright/test` 를 1.42+ 로 올린 뒤 이 절차를 다시 실행 |
+| 업그레이드 불가 | 티어링 CI 대신 단일 job 워크플로우를 손으로 작성하도록 안내한다. 이때 0-매칭 안전장치(4.2.5)를 쓸 수 없으므로 `--grep` 기반 티어 분할도 함께 포기해야 한다 |
+
+#### (2) config 의 CI 서버 기동
+
+워크플로우는 빌드 산출물만 내려받고 **앱 서버를 직접 띄우지 않는다**. 서버는
+`playwright.config.ts` 의 `webServer` 가 띄운다. 따라서 CI를 붙이기 전에 config를 확인한다:
+
+```bash
+grep -n "USE_LOCAL_SERVER\|webServer" playwright.config.ts
+```
+
+`webServer: process.env.CI ? undefined : {...}` 형태(v0.4.0 이하에서 생성된 config)라면
+**CI에서 서버가 뜨지 않아 모든 테스트가 `ERR_CONNECTION_REFUSED` 로 실패한다.**
+이 경우 `assets/templates/playwright.config.ts.tmpl` 의 `USE_LOCAL_SERVER` / `webServer` 블록으로
+갱신하고, `{{START_CMD}}` 는 `references/phase-1-setup.md` Step 4의 **START_CMD 포트 규칙 표**를
+따라 확정한다 (프레임워크 기본 포트를 믿지 말 것 — 그 표가 단일 출처다).
+
+#### (3) pnpm 프로젝트의 `packageManager` 필드
+
+`{{PACKAGE_MANAGER}}` 가 **pnpm** 일 때만 해당한다. 템플릿은 `pnpm/action-setup@v4` 를 `version`
+입력 없이 쓰는데, 이 액션은 `version` 입력이나 `package.json` 의 `packageManager` 필드 중 하나를
+반드시 요구한다. 둘 다 없으면 `No pnpm version is specified` 로 **build job 첫 스텝부터 실패**하고,
+그 결과 E2E Gate 가 빨간불이 되어 모든 PR 이 막힌다.
+
+```bash
+node -p "require('./package.json').packageManager ?? '(없음)'"
+```
+
+`(없음)` 이면 사용자에게 아래 중 하나를 제안하고 확인을 받는다:
+
+| 선택 | 조치 |
+|---|---|
+| **권장** — `packageManager` 추가 | `package.json` 에 `"packageManager": "pnpm@<설치된 버전>"` 추가 (`pnpm --version` 으로 확인). corepack 표준이라 로컬·CI 버전이 함께 고정된다 |
+| 워크플로우에만 고정 | 3개 job 의 `pnpm/action-setup@v4` 에 `with: { version: <버전> }` 추가 |
+
+yarn·npm 은 이 제약이 없다.
 
 ### 4.2.1 사용자 의도 확인
 
 `AskUserQuestion`:
 
-1. 트리거 — "모든 PR / 라벨 기반 / 스케줄 / 셋 다"?
-2. 노드 버전 (`.nvmrc` 또는 `package.json` engines에서 감지)
-3. 빌드 명령 (`pnpm build` / `npm run build` / 감지된 패키지 매니저)
+1. **야간 전체 실행(nightly)을 켤지?** → 켜면 `schedule` 유지, 끄면 `on:` 의 `schedule` 블록 2줄 삭제
+2. **기본 브랜치명** (`main` / `master` / 기타) — `git symbolic-ref refs/remotes/origin/HEAD` 로 먼저 감지하고 확인만 받는다
+3. **빌드/기동 명령** — Phase 1의 Analyzer 결과(`dev_command`, `start_command`)와 `package.json` scripts 교차확인
+
+티어 체계 자체는 선택지가 아니다. 사용자가 "전부 다 돌려줘" 를 원하면 `e2e:full` 라벨 운영을 안내한다.
 
 ### 4.2.2 파일 생성
 
-`.github/workflows/playwright.yml` 을 `assets/templates/ci/playwright-dynamic-shard.yml.tmpl` 로부터 생성. 치환 변수:
+`.github/workflows/playwright.yml` 을 `assets/templates/ci/playwright-e2e.yml.tmpl` 로부터 생성. 치환 변수:
 
-- `{{PACKAGE_MANAGER}}` — **pnpm/npm/yarn** (이 값은 템플릿의 pnpm 셋업 조건과 `actions/setup-node` 의 `cache:` 입력에 쓰인다. `cache` 는 npm/yarn/pnpm 만 지원한다).
-- `{{PW_EXEC}}` — 로컬 playwright 바이너리 실행 프리픽스. 매니저별로 다르다: pnpm → `pnpm exec`, **npm → `npx`** (`npm exec` 는 `--with-deps`·`--reporter` 같은 뒤따르는 플래그를 npm 이 소비해 Playwright 로 전달하지 않으므로 `npx` 를 쓴다), yarn → `yarn exec`. `{{PACKAGE_MANAGER}} exec` 로 뭉뚱그리지 말 것.
-- `{{INSTALL_CMD}}` — `pnpm install --frozen-lockfile` / `npm ci` / `yarn install --frozen-lockfile`
-- `{{BUILD_CMD}}` — `pnpm build` 등
-- `{{NODE_VERSION}}` — `20` (기본) 또는 감지값
+| 플레이스홀더 | 값 |
+|---|---|
+| `{{PACKAGE_MANAGER}}` | pnpm / npm / yarn. `actions/setup-node` 의 `cache:` 입력과 pnpm 셋업 조건에 쓰인다 |
+| `{{PW_EXEC}}` | 로컬 playwright 실행 프리픽스. pnpm → `pnpm exec`, **npm → `npx`**, yarn → `yarn exec`. `{{PACKAGE_MANAGER}} exec` 로 뭉뚱그리지 말 것 (`npm exec` 는 뒤따르는 `--grep`·`--shard` 플래그를 npm 이 소비한다) |
+| `{{INSTALL_CMD}}` | `pnpm install --frozen-lockfile` / `npm ci` / `yarn install --frozen-lockfile` |
+| `{{BUILD_CMD}}` | `pnpm build` 등 |
+| `{{START_CMD}}` | 프로덕션 빌드 기동 명령. **BASE_URL 과 같은 포트에 명시 바인딩** (phase-1-setup.md Step 4 표) |
+| `{{NODE_VERSION}}` | `20` (기본) 또는 `.nvmrc` / `engines` 감지값 |
+| `{{DEFAULT_BRANCH}}` | `main` 등. `git symbolic-ref refs/remotes/origin/HEAD` 로 감지 |
+| `{{NIGHTLY_CRON}}` | `0 22 * * *` (매일 KST 07:00). 4.2.1에서 nightly 를 끄면 schedule 블록째 삭제 |
+| `{{SKIP_PATHS_REGEX}}` | E2E 무관 경로 ERE. **기본값은 바로 아래 코드 블록에서 그대로 복사할 것** (표 셀에는 정확한 값을 적을 수 없다 — 아래 설명 참고) |
+| `{{PRIMARY_PROJECT}}` | 기본 실행 project 이름. config 의 첫 project (기본 `chromium-desktop`) |
 
-> **Bun 프로젝트 주의**: 이 CI 템플릿은 `actions/setup-node` 의 `cache` (npm/yarn/pnpm 만 지원)와 pnpm 셋업만 다루므로 **bun 을 그대로 지원하지 않는다**. bun 프로젝트는 (1) 각 job 에 `oven-sh/setup-bun@v2` 스텝을 추가하고, (2) `setup-node` 의 `cache:` 입력을 제거(또는 bun 전용 캐시로 대체)하며, (3) `{{PW_EXEC}}` 를 `bunx` 로, `{{INSTALL_CMD}}` 를 `bun install --frozen-lockfile` 로 치환하는 수동 조정이 필요하다. (Phase 1·3 의 로컬 실행 명령은 bun/bunx 를 완전히 지원한다 — 이 제약은 CI 워크플로우에 한정된다.)
-- `{{TRIGGER_BLOCK}}` — 템플릿의 `on:` 블록 전체(헤더 `on:` 포함)를 대체하는 자리. 4.2.1에서 받은 사용자 선택에 따라 아래 4가지 조각 중 하나를 그대로 삽입한다. 조각은 칼럼 0의 `on:`부터 시작하므로 들여쓰기를 바꾸지 말고 그대로 붙여넣을 것.
-- `{{FILTER_CONDITION}}` — `filter` job의 `if:` 값을 대체하는 자리(한 줄 표현식 또는 `true`). **반드시 `{{TRIGGER_BLOCK}}`과 같은 선택지의 짝 값을 사용한다** — 트리거 조각만 바꾸고 이 값을 그대로 두면(또는 그 반대) 라벨 필드가 없는 이벤트에서 `filter`가 항상 skip되어 build/generate-shards-matrix까지 연쇄로 skip되고 워크플로우가 조용히 아무 것도 실행하지 않는다.
+#### `{{SKIP_PATHS_REGEX}}` 기본값
 
-**트리거 선택지별 치환 조각 — `{{TRIGGER_BLOCK}}`과 `{{FILTER_CONDITION}}`은 항상 같은 번호의 값을 짝으로 사용한다** (4가지 모두 `workflow_dispatch:` 공통 포함):
-
-① 모든 PR
-
-`{{TRIGGER_BLOCK}}`:
-```yaml
-on:
-  pull_request:   # 모든 PR 이벤트(open/synchronize/reopen)에서 트리거
-  workflow_dispatch:   # 수동 실행
-```
-
-`{{FILTER_CONDITION}}`: `true`
-(open/synchronize/reopened 이벤트에는 `github.event.label` 필드 자체가 없으므로 라벨 게이트를 걸면 항상 false가 되어 워크플로우가 skip된다 — 게이트 없이 항상 통과시킨다.)
-
-② 라벨 기반 (기존 기본값)
-
-`{{TRIGGER_BLOCK}}`:
-```yaml
-on:
-  pull_request:
-    types: [labeled]   # 'e2e' 또는 'release' 라벨 추가 시 트리거
-  workflow_dispatch:   # 수동 실행
-```
-
-`{{FILTER_CONDITION}}`:
-```
-github.event_name != 'pull_request' || github.event.label.name == 'e2e' || github.event.label.name == 'release'
-```
-(labeled 이벤트에만 트리거되므로 `github.event.label`이 항상 존재 — 붙은 라벨이 e2e/release일 때만 통과, workflow_dispatch로 수동 실행 시에는 첫 절에서 무조건 통과.)
-
-③ 스케줄
-
-`{{TRIGGER_BLOCK}}`:
-```yaml
-on:
-  workflow_dispatch:   # 수동 실행
-  schedule:
-    - cron: '0 22 * * *'   # 매일 KST 07:00 (UTC 22:00) 실행
-```
-
-`{{FILTER_CONDITION}}`: `true`
-(pull_request 트리거 자체가 없으므로 라벨 게이트가 애초에 무의미 — 항상 통과시킨다.)
-
-④ 셋 다
-
-`{{TRIGGER_BLOCK}}`:
-```yaml
-on:
-  pull_request:
-    types: [opened, synchronize, reopened, labeled]   # 모든 PR 이벤트 + 라벨로도 수동 재실행 가능
-  workflow_dispatch:   # 수동 실행
-  schedule:
-    - cron: '0 22 * * *'   # 매일 KST 07:00 (UTC 22:00) 실행
-```
-
-`{{FILTER_CONDITION}}`: `true`
-(open/synchronize/reopened로 이미 모든 PR이 포함되므로 라벨 게이트는 무의미 — `labeled` 타입은 게이트 조건이 아니라 "라벨을 추가/변경해 수동으로 재실행"하는 용도로만 남겨둔 것이다.)
-
-### 4.2.3 워크플로우 구조 (요약)
-
-```yaml
-name: E2E Tests
-
-# 실제 템플릿 파일(ci/playwright-dynamic-shard.yml.tmpl)에서 on: 블록 전체는
-# {{TRIGGER_BLOCK}} 플레이스홀더 한 줄이고, filter job의 if: 값은 {{FILTER_CONDITION}}
-# 플레이스홀더다 (치환 전). 아래는 4.2.2 ②(라벨 기반, 기존 기본값) 선택 시 치환된
-# 실제 모습이다 — 다른 선택지는 4.2.2의 짝 조각(①③④) 참고.
-on:
-  pull_request:
-    types: [labeled]   # e2e/release 라벨 시 실행
-  workflow_dispatch:   # 수동 실행
-
-jobs:
-  filter:
-    # {{TRIGGER_BLOCK}}과 짝인 {{FILTER_CONDITION}}으로 트리거 조건을 게이트
-    # (라벨 기반 선택 시에만 라벨 검사, 나머지 선택지는 무조건 통과)
-
-  build:
-    needs: filter
-    # Next.js 등 빌드를 1회만 수행, artifact 업로드
-
-  generate-shards-matrix:
-    needs: filter
-    # {{PW_EXEC}} playwright test --grep-invert=@vrt --list 로 총 개수 측정
-    # 15개당 1 shard 계산
-    # outputs: matrix, shard-count
-
-  e2e-test:
-    needs: [build, generate-shards-matrix]
-    strategy:
-      matrix:
-        include: ${{ fromJSON(needs.generate-shards-matrix.outputs.matrix) }}
-    steps:
-      - actions/download-artifact (빌드 결과)
-      - {{PW_EXEC}} playwright test --grep-invert=@vrt --shard=${{ matrix.shard-index }}/${{ matrix.total-shards }} --reporter=blob
-
-  merge-reports:
-    needs: [e2e-test]
-    if: ${{ always() && needs.e2e-test.result == 'failure' }}
-    steps:
-      - playwright merge-reports → HTML
-      - actions/upload-artifact (병합된 리포트)
-```
-
-### 4.2.4 사용자 보고
+마크다운 표 안에서는 `|` 가 셀 구분자라 `\|` 로 이스케이프해야 하는데, ERE 에서 `\|` 는 교대(alternation)가
+아니라 **리터럴 파이프 문자**로 해석된다. 이스케이프된 값을 그대로 치환하면 어떤 파일명과도 매치되지
+않아 경로 기반 skip 이 조용히 무력화된다. 반드시 아래 블록의 값을 그대로 쓴다:
 
 ```
-✅ Dynamic Shard CI 추가 완료
+^(docs/.*|.*\.(md|mdx|txt)|LICENSE|\.editorconfig|\.prettierrc.*)$
+```
+
+프로젝트에 맞게 조정할 때도 백슬래시는 `.` 을 리터럴로 만들 때만 쓴다 (`\.md`). `|` 앞에는 절대 붙이지 않는다.
+
+치환 후 아래 두 명령으로 검증한다. `<치환한 regex>` 자리에 실제로 넣은 값을 그대로 붙인다:
+
+```bash
+printf '%s\n' docs/a.md README.md LICENSE | grep -vE '<치환한 regex>'
+```
+→ **출력이 없어야 한다.** 한 줄이라도 나오면 이스케이프가 잘못된 것이다.
+
+```bash
+printf '%s\n' src/app/page.tsx README.md | grep -vE '<치환한 regex>'
+```
+→ **`src/app/page.tsx` 만 남아야 한다.**
+
+> **러너 전제**: 템플릿은 `runs-on: ubuntu-latest` 를 쓰며 **`jq` 가 설치되어 있다고 가정한다**
+> (GitHub 호스팅 러너에는 기본 탑재). 라벨 판정·도메인 스코프·shard 매트릭스 생성에 쓰인다.
+> self-hosted 러너로 바꾼다면 jq 를 먼저 설치할 것 — 없으면 `decide` / `build` job 이
+> `::error::` 와 함께 즉시 중단된다 (라벨을 조용히 무시하지 않도록 일부러 크게 실패시킨다).
+> `gh api --jq` 는 gh 내장 구현이라 별도 설치와 무관하다.
+
+> **Bun 프로젝트 주의**: 이 템플릿은 `actions/setup-node` 의 `cache` (npm/yarn/pnpm 만 지원)와
+> pnpm 셋업만 다루므로 **bun 을 그대로 지원하지 않는다**. bun 프로젝트는 (1) 각 job 에
+> `oven-sh/setup-bun@v2` 스텝을 추가하고, (2) `setup-node` 의 `cache:` 입력을 제거하며,
+> (3) `{{PW_EXEC}}` 를 `bunx`, `{{INSTALL_CMD}}` 를 `bun install --frozen-lockfile` 로
+> 치환하는 수동 조정이 필요하다. (Phase 1·3 의 로컬 실행 명령은 bun/bunx 를 완전히 지원한다 —
+> 이 제약은 CI 워크플로우에 한정된다.)
+
+### 4.2.3 티어 예산
+
+| 티어 | 진입 | 실행 범위 | tests/shard | shard 상한 | project | timeout |
+|---|---|---|---|---|---|---|
+| `skip` | `e2e:skip` 라벨 / draft PR / 무관 경로만 변경 | 없음 | — | 0 | — | — |
+| `smoke` | **PR 기본값** | `--grep @smoke` | (고정) | **1** | `{{PRIMARY_PROJECT}}` | 10분 |
+| `scoped` | PR + `e2e/ci-scope.json` 매칭 (4.4) | 매칭 도메인 디렉터리 | 15 | 4 | `{{PRIMARY_PROJECT}}` | 20분 |
+| `critical` | 기본 브랜치 push / `merge_group` | `--grep "@smoke\|@critical"` | 20 | 4 | `{{PRIMARY_PROJECT}}` | 20분 |
+| `full` | `e2e:full` 라벨 | 전체 | 15 | 8 | `{{PRIMARY_PROJECT}}` | 30분 |
+| `nightly` | `schedule` | 전체 | **40** | **3** | config 전체 | 60분 |
+
+모든 티어가 `--grep-invert @vrt` 로 VRT를 제외한다.
+
+설계 근거 (사용자가 파라미터를 바꾸려 할 때 설명할 것):
+- **smoke는 shard 1 고정.** 테스트 몇 개를 2 shard로 쪼개면 job 오버헤드(checkout+install ≈ 60초)가
+  실행 시간보다 크다. shard는 wall-clock을 줄이지만 job마다 오버헤드를 복제한다.
+- **nightly는 밀도 40 / 상한 3.** 시간 제약이 없으니 job 수를 최소화해 비용을 줄인다 —
+  smoke/full과 **정반대 방향**의 최적화다.
+- **nightly만 `--project` 미지정** → config의 모든 project 실행. 사용자가 `chromium-mobile`
+  주석을 해제하면 야간에만 자동 포함된다.
+- **timeout은 티어별 상한.** 미지정 시 GitHub 기본은 360분이라 서버 hang 한 번이 6시간 과금이다.
+- **shard 수는 spec 파일 수로도 조인다.** Playwright 는 파일 단위로 분할하므로 shard 가 파일 수보다
+  많으면 남는 shard 는 0개 테스트로 돌면서 job 오버헤드만 태운다. 개수 측정이 `Total: N tests in M files`
+  에서 M 도 함께 읽어 상한으로 쓴다 (실측: 5 tests in 1 file → `--shard=2/2` 는 0개).
+
+### 4.2.4 티어 결정 순서 (위→아래 첫 매치)
+
+| # | 조건 | tier |
+|---|---|---|
+| 1 | `workflow_dispatch` + `inputs.tier` | 지정값 |
+| 2 | `e2e:skip` 라벨 보유 | `skip` |
+| 3 | `e2e:full` 라벨 보유 | `full` |
+| 4 | draft PR | `skip` |
+| 5 | 변경 파일이 전부 `{{SKIP_PATHS_REGEX}}` 매치 (**파일 0개면 관련 있음**) | `skip` |
+| 6 | `schedule` | `nightly` |
+| 7 | `push`(기본 브랜치) / `merge_group` | `critical` |
+| 8 | 그 외 PR → `ci-scope.json` 없으면 `smoke`, 있으면 4.4 | `smoke`/`scoped`/`full` |
+
+**명시적 라벨(2·3행)이 암묵 판정(4·5행)보다 위**에 온다. 라벨은 사용자의 의사표시이므로
+draft나 경로 휴리스틱이 뒤집지 않는다.
+
+수정 시 반드시 지킬 것:
+- **라벨 판정은 `github.event.pull_request.labels.*.name` (현재 상태)** 으로 한다.
+  `github.event.label` (이벤트 순간값)을 쓰면 라벨을 붙인 그 순간 1회만 돌고
+  이후 push(`synchronize`)에는 돌지 않는다.
+- **라벨 비교는 `toJSON` + `jq` 배열 원소 일치.** 구분자로 이어 붙여 비교하지 말 것 —
+  부분 문자열 매치는 `e2e:full-stack` 을 `e2e:full` 로 오인하고, 쉼표 결합은 `review,e2e:skip`
+  이라는 **단일 라벨**을 `e2e:skip` 으로 오인한다 (라벨명에 쉼표가 들어갈 수 있다).
+  `jq -e` 의 **exit 1(불일치)과 exit >1(동작 실패)을 구분**해, 후자는 `::error::` 로 중단한다.
+  뭉뚱그리면 `e2e:full` 이 조용히 무시되어 smoke 만 도는 저테스트가 된다.
+- **라벨명·파일명은 사용자 제어 입력.** `run:` 블록에 `${{ }}` 로 직접 보간하면 스크립트
+  인젝션이 되므로 반드시 `env:` 를 경유한다.
+- **`gh api` 실패 시 `relevant=true` 폴백 + `::warning::`.** 경고가 없으면 경로 skip 기능이
+  조용히 무력화된 채로 동작한다.
+
+### 4.2.5 조용한 무실행 방지 (안전장치 — 절대 생략 금지)
+
+태그를 아직 안 붙인 프로젝트에서 `--grep @smoke` 가 0개를 매칭하면 "아무것도 안 돌았는데
+초록불"이 된다. 이게 이 워크플로우의 최악 실패 모드다.
+
+**Playwright 동작의 비대칭**:
+- `playwright test --list --grep X` 는 매칭이 0개면 `No tests found` 로 **exit 1** 이다.
+  개수 측정 스텝에는 **`--pass-with-no-tests`** 를 붙여야 0이 정상 출력된다.
+- 실행 스텝은 `--shard` 가 있으면 0개여도 exit 0 이 되는 버전이 있다. 이 버전 의존성에
+  기대지 말고 **실행 스텝에도 `--pass-with-no-tests` 를 붙여 동작을 고정**하고,
+  통과/실패 판정은 오직 `build.outputs.total` 과 gate로만 한다.
+- **개수 측정과 실행은 동일한 `--grep`/경로/`--project` 인자를 써야 한다.** 인자가 갈라지면
+  "5개 세고 0개 실행"이 조용히 통과한다.
+
+규칙:
+- `smoke`/`scoped`/`critical` 에서 총계 0 → **`full` 로 승격** + `::warning::` + job summary 기록 후 재측정
+- 승격 후에도 0 → `total=0` 출력 → `e2e-test` 는 skip → gate는 green + `::warning::`
+- Phase 1이 생성하는 예시 spec에 `@smoke` 가 붙어 있어 최소 1개는 보장된다
+
+### 4.2.6 E2E Gate (branch protection)
+
+shard 개수가 동적이라 개별 job 이름을 required check로 등록할 수 없다. 항상 도는 단일
+gate job이 그 역할을 한다.
+
+| decide | tier | build | total | e2e-test | gate |
+|---|---|---|---|---|---|
+| ≠ success | — | — | — | — | **실패** |
+| success | `skip` | skipped | — | skipped | 성공 + notice |
+| success | ≠ skip | ≠ success | — | skipped | **실패** |
+| success | ≠ skip | success | `0` | skipped | 성공 + warning |
+| success | ≠ skip | success | >0 | success | 성공 |
+| success | ≠ skip | success | >0 | 그 외 | **실패** |
+
+**"skipped = 성공" 은 tier=skip 또는 total=0 일 때만 허용**된다. 그 밖의 skipped 는 전부 상위
+job 실패의 결과이므로 실패다 (build가 깨졌는데 gate가 green이면 결함을 그대로 머지하게 된다).
+
+`on.pull_request.paths:` 로 걸러내지 않는 이유: 그러면 워크플로우 자체가 트리거되지 않아
+required check가 영원히 pending으로 남는다. job-level `if:` 로 skip해야 skipped가 성공으로
+집계된다 — 그래서 경로 필터를 `on:` 이 아니라 decide job 안에 둔다.
+
+### 4.2.7 사용자에게 안내할 후속 설정
+
+워크플로우 파일만으로는 끝나지 않는다. 다음 3가지를 **명령/경로와 함께** 안내한다:
+
+1. **라벨 2개 생성**
+   ```bash
+   gh label create "e2e:full" --description "이 PR 에서 E2E 전체 스위트 실행" --color 0E8A16
+   gh label create "e2e:skip" --description "이 PR 에서 E2E 건너뛰기" --color C5DEF5
+   ```
+2. **branch protection에 `E2E Gate` 만 required check로 등록**
+   (Settings → Branches → 대상 브랜치 → Require status checks → `E2E Gate`)
+3. **`@smoke` / `@critical` 태그 부여** — 태그가 없으면 매 PR이 full로 승격되어 비용 절감이 없다.
+   Phase 2가 신규 spec에 자동 부여하지만, 기존 spec은 사용자가 붙여야 한다.
+
+### 4.2.8 사용자 보고
+
+```
+✅ 티어링 CI 추가 완료
 
 생성:
 - .github/workflows/playwright.yml
 
-동작 방식:
-- 트리거: <사용자 선택>
-- 빌드는 1회 → artifact로 shard들이 공유
-- 테스트 개수에 비례해 shard 자동 생성 (15개당 1)
-- 실패 시 shard 리포트를 1개 HTML로 병합
+실행 티어:
+- PR 기본        → @smoke 만 (shard 1, ~3분)
+- e2e:full 라벨  → 전체 스위트 (shard 최대 8)
+- e2e:skip 라벨  → 건너뛰기
+- main 반영      → @smoke|@critical
+- 야간 스케줄    → 전체 + config 의 모든 project
+- 문서/마크다운만 변경한 PR, draft PR → 자동 skip
 
-다음 단계:
-- 첫 실행: PR에 `e2e` 라벨을 붙여 트리거 확인
-- 실패 시 Actions 탭에서 병합된 HTML 리포트 다운로드
+필요한 후속 설정 (3가지):
+1. 라벨 생성: gh label create "e2e:full" ... / "e2e:skip" ...
+2. branch protection 의 required check 에 "E2E Gate" 등록
+3. 기존 spec 에 @smoke / @critical 태그 부여
+   (태그가 하나도 없으면 매 PR 이 전체 스위트로 승격됩니다)
+
+첫 실행 확인:
+- PR 을 열면 smoke 티어가 돕니다
+- e2e:full 라벨을 붙이면 전체로 전환되고, 그 라벨을 유지한 채 커밋을 더 밀어도 계속 전체가 돕니다
+- 실패 시 Actions 탭에서 e2e-html-report 아티팩트 다운로드
 ```
 
 ---
 
 ## 4.3 알림 추가 (선택)
 
-사용자가 명시적으로 요청할 때만 실행. Slack/Mattermost webhook을 워크플로우 끝에 추가.
+사용자가 명시적으로 요청할 때만 실행. Slack/Mattermost webhook을 `e2e-gate` job 끝에 추가한다
+(gate가 최종 판정을 아는 유일한 job이다).
 
 ```yaml
-# .github/workflows/playwright.yml 끝에 추가
-- name: Notify
-  if: always()
-  uses: slackapi/slack-github-action@v1
-  with:
-    payload: |
-      {
-        "text": "E2E 결과: ${{ needs.e2e-test.result }}",
-        "blocks": [...]
-      }
-  env:
-    SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      - name: Notify
+        if: ${{ !cancelled() }}
+        uses: slackapi/slack-github-action@v1
+        with:
+          payload: |
+            {
+              "text": "E2E ${{ needs.e2e-test.result }} (tier=${{ needs.decide.outputs.tier }})"
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 ```
 
 Secret 등록 안내:
 ```
 GitHub → Settings → Secrets and variables → Actions
 - SLACK_WEBHOOK_URL 추가
+```
+
+> `skip` 티어에서도 알림이 가면 소음이 된다. 필요하면
+> `if: ${{ !cancelled() && needs.decide.outputs.tier != 'skip' }}` 로 좁힌다.
+
+---
+
+## 4.4 도메인 스코프 실행 (선택 기능)
+
+4.2를 이미 적용한 프로젝트에서 "바뀐 영역만 돌려줘" 요청이 올 때 실행한다.
+
+### 4.4.1 동작
+
+`e2e/ci-scope.json` **파일이 존재할 때만** 켜진다. 이 스킬의 `e2e/tests/{도메인}/` 구조와
+1:1로 매핑된다.
+
+스코프는 **PR 기본 티어(smoke)를 넓히는** 기능이다. `e2e:full` 은 명시 의사이므로 절대 좁히지
+않는다 ("전부 돌려" 라벨을 붙였는데 2개 도메인만 돌면 배신이다).
+
+결정 순서 8행에서:
+
+| 상황 | 결과 |
+|---|---|
+| `always` 경로가 하나라도 변경됨 | `full` (스코핑 미적용) |
+| 매칭 도메인 ≥ 1 | `scoped` — `playwright test e2e/tests/{도메인} ...` |
+| 매칭 도메인 0 | `fallback` 값 (`full` \| `smoke`) |
+
+전부 "의심스러우면 넓게" 방향이다. 도메인명은 경로 인자로 쉘에 전달되므로 `[A-Za-z0-9._-]`
+문자셋만 허용하고, 벗어나면 무시 + 경고한다.
+
+### 4.4.2 파일 생성
+
+`assets/templates/ci/ci-scope.example.json.tmpl` 을 `e2e/ci-scope.json` 으로 복사한 뒤,
+**사용자 프로젝트의 실제 경로로 도메인 매핑을 다시 쓴다** (예시 값을 그대로 두면 안 된다).
+
+매핑 작성 절차:
+1. `e2e/tests/` 의 도메인 디렉터리 목록을 Glob으로 수집
+2. 각 도메인에 대응하는 소스 경로를 사용자에게 확인 (`AskUserQuestion` 또는 라우팅 구조에서 추론 후 제시)
+3. 공용 컴포넌트·설정·Helper 경로를 `always` 에 넣는다
+
+### 4.4.3 fallback 값 선택
+
+**매핑이 성숙하기 전에는 `"fallback": "smoke"` 를 권장한다.** `full` 로 두면 매핑에 걸리지 않는
+PR이 전부 전체 스위트를 돌려 이 기능이 오히려 비용을 늘린다. 매핑이 안정되면 `full` 로 올린다.
+
+### 4.4.4 사용자 보고
+
+```
+✅ 도메인 스코프 실행 활성화
+
+생성:
+- e2e/ci-scope.json (도메인 N개 매핑)
+
+동작:
+- PR 에서 변경 경로 → 영향 도메인만 실행 (scoped 티어)
+- 공용 경로(always) 변경 시 → 전체
+- 매칭 도메인 없음 → fallback = <값>
+- e2e:full 라벨은 이 매핑을 무시하고 항상 전체
+
+⚠️ 매핑이 틀리면 "테스트가 조용히 안 도는" 실패 모드가 됩니다.
+   앱 구조를 바꿀 때 ci-scope.json 도 함께 갱신하세요.
 ```
 
 ---
@@ -287,11 +490,13 @@ GitHub → Settings → Secrets and variables → Actions
 
 추가된 확장:
 - VRT: e2e/helpers/vrt.ts, 예시 1개 (CI 게이트 미강제)
-- CI: .github/workflows/playwright.yml (Dynamic Shard)
+- CI: .github/workflows/playwright.yml (티어링)
+- 스코프: e2e/ci-scope.json
 - 알림: Slack webhook 연동 (Secret 등록 필요)
 
 다음 단계:
 - VRT 베이스라인 생성: pnpm test:vrt-update
-- CI 첫 실행: PR에 e2e 라벨 부여
+- 라벨 생성 + branch protection 에 "E2E Gate" 등록
+- 기존 spec 에 @smoke / @critical 부여
 - Secret 등록: SLACK_WEBHOOK_URL
 ```
