@@ -352,17 +352,20 @@ jobs:
               printf '%s\n' "$OUT" >&2
               return 1
             fi
-            printf '%s\n' "$OUT" | awk '/^[[:space:]]*Total:/ {n=$2} END {print n+0}'
+            # "Total: 12 tests in 3 files" → "<테스트 수> <파일 수>"
+            printf '%s\n' "$OUT" | awk '/^[[:space:]]*Total:/ {n=$2; f=$5} END {print n+0, f+0}'
           }
 
           set_params "$TIER"
           RUN_PATHS=''
           [ "$TIER" = "scoped" ] && RUN_PATHS="$SCOPE_PATHS"
 
-          if ! TOTAL=$(count_tests); then
+          if ! COUNTS=$(count_tests); then
             echo "::error::테스트 목록 조회에 실패했습니다."
             exit 1
           fi
+          TOTAL=${COUNTS% *}
+          FILES=${COUNTS#* }
 
           # 0-매칭 승격 — 태그를 아직 안 붙인 프로젝트에서 '아무것도 안 돌았는데 초록불'을 막는다.
           PROMOTED=""
@@ -372,10 +375,12 @@ jobs:
             TIER=full
             set_params "$TIER"
             RUN_PATHS=''
-            if ! TOTAL=$(count_tests); then
+            if ! COUNTS=$(count_tests); then
               echo "::error::테스트 목록 조회에 실패했습니다."
               exit 1
             fi
+            TOTAL=${COUNTS% *}
+            FILES=${COUNTS#* }
           fi
 
           if [ "$TOTAL" -eq 0 ]; then
@@ -386,6 +391,12 @@ jobs:
             SHARDS=$(( (TOTAL + DENSITY - 1) / DENSITY ))
             [ "$SHARDS" -lt 1 ] && SHARDS=1
             [ "$SHARDS" -gt "$MAX" ] && SHARDS="$MAX"
+            # Playwright 는 spec '파일' 단위로 분할한다 — shard 가 파일 수보다 많으면
+            # 남는 shard 는 0개 테스트로 돌면서 job 오버헤드만 태운다. 파일 수로도 한 번 더 조인다.
+            if [ "$FILES" -gt 0 ] && [ "$SHARDS" -gt "$FILES" ]; then
+              echo "::notice::shard 를 $SHARDS → $FILES 로 줄입니다 (spec 파일이 $FILES 개뿐이라 남는 shard 는 빈 채로 돕니다)."
+              SHARDS="$FILES"
+            fi
             MATRIX=$(jq -cn --argjson c "$SHARDS" \
               '[range(1; $c + 1) | {"shard-index": ., "total-shards": $c}]')
           fi
@@ -402,7 +413,7 @@ jobs:
 
           {
             echo "| 실행 티어 | \`$TIER\`${PROMOTED:+ (\`$PROMOTED\` 에서 승격 — 매칭 0개)} |"
-            echo "| 테스트 수 | $TOTAL |"
+            echo "| 테스트 수 | $TOTAL (spec 파일 $FILES 개) |"
             echo "| shard | $SHARDS (상한 $MAX) |"
             echo "| job 타임아웃 | ${TIMEOUT}분 |"
           } >> "$GITHUB_STEP_SUMMARY"

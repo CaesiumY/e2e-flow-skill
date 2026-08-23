@@ -278,6 +278,9 @@ printf '%s\n' src/app/page.tsx README.md | grep -vE '<치환한 regex>'
 - **nightly만 `--project` 미지정** → config의 모든 project 실행. 사용자가 `chromium-mobile`
   주석을 해제하면 야간에만 자동 포함된다.
 - **timeout은 티어별 상한.** 미지정 시 GitHub 기본은 360분이라 서버 hang 한 번이 6시간 과금이다.
+- **shard 수는 spec 파일 수로도 조인다.** Playwright 는 파일 단위로 분할하므로 shard 가 파일 수보다
+  많으면 남는 shard 는 0개 테스트로 돌면서 job 오버헤드만 태운다. 개수 측정이 `Total: N tests in M files`
+  에서 M 도 함께 읽어 상한으로 쓴다 (실측: 5 tests in 1 file → `--shard=2/2` 는 0개).
 
 ### 4.2.4 티어 결정 순서 (위→아래 첫 매치)
 

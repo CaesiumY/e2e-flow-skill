@@ -48,6 +48,7 @@
 - **변경 파일 목록이 비었을 때 skip 으로 빠지던 문제** — `grep -v` 파이프라인이 빈 입력을 "매치 없음"으로 반환해 `RELEVANT=false` → skip → gate green 으로 흘렀다. 빈 목록을 명시적으로 "관련 있음"으로 처리
 - 개수 측정 스텝의 불필요한 `playwright install` 제거 — `--list` 는 브라우저가 필요 없다 (job 당 60~90초)
 - shard 개수 상한 도입 — 기존에는 무제한이라 테스트 300개면 러너 20대를 동시 점유했다
+- **shard 수를 spec 파일 수로도 조임** — Playwright 는 파일 단위로 분할하므로 shard 가 파일 수보다 많으면 남는 shard 가 0개 테스트로 돌며 job 오버헤드만 태운다. 실제 Playwright 1.62 로 확인 후 반영
 
 ### Migration (v0.4.x 에서 올라오는 경우)
 

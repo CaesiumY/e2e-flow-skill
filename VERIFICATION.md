@@ -334,7 +334,7 @@ v0.5.0의 티어링 CI는 **게이팅 로직**이라 회귀가 조용히 통과�
 | V1 치환 토큰 정합성 | 사용 11종 ↔ 문서화 11종 교차검증 | ✅ 누락·잉여 0 |
 | V2 워크플로우 YAML 파싱 | 렌더 후 `yaml.safe_load` | ✅ job 5개 파싱 |
 | V3 티어 결정 로직 | 33 케이스 (**출력 + 종료 코드** 동시 단언, 라벨 경계 4건 + jq 부재·오류 5건 포함) | ✅ 33/33 |
-| V4-a 0-매칭 승격 | 8 케이스 | ✅ 8/8 |
+| V4-a 0-매칭 승격 + 파일 수 상한 | 11 케이스 | ✅ 11/11 |
 | V4-b E2E Gate 진리표 | 8 케이스 | ✅ 8/8 |
 | V5 config 분기 (결함 A·D) | 15 케이스 | ✅ 15/15 |
 | 인자 일치 감사 (count↔run) | 5 플래그 | ✅ 전부 일치 |
@@ -405,6 +405,28 @@ PR #3 에 대한 `chatgpt-codex-connector` 의 인라인 리뷰. 전부 재현 �
 | 개수 측정 | 매칭 0개 → Playwright exit 1 | `--pass-with-no-tests` + `full` 승격 |
 | 실행 | `--shard` 와 0개 → exit 0 (버전 의존) | 실행에도 `--pass-with-no-tests`, 판정은 `total`+gate로만 |
 | gate | 상위 job 실패 → `e2e-test` skipped | "skipped=성공" 은 tier=skip / total=0 일 때만 |
+
+## 실제 Playwright 로 확인한 가정 (v0.5.0, 1.62.1)
+
+`--list` 는 브라우저가 필요 없어 `@playwright/test` 만 설치해 실측했다. 개수 측정·승격 안전장치가
+전부 이 출력 형식에 걸려 있어 가장 큰 미검증 가정이었다.
+
+| 확인 항목 | 결과 |
+|---|---|
+| `Total: N tests in M files` 출력 형식 | ✅ awk `$2`/`$5` 파싱 일치 (단수 `1 file` 도 동일) |
+| `--grep @smoke` / `@smoke\|@critical` 카운트 | ✅ 2 / 3 (설계대로, smoke ⊂ critical) |
+| `--pass-with-no-tests` + 0매칭 | ✅ exit 0, `Total: 0 tests in 0 files` → 승격 트리거 정상 |
+| 플래그 없이 0매칭 | ✅ **exit 1 `No tests found`** — 플래그가 필수인 근거 확인 |
+| 실행 스텝 인자 조합 (`--shard` + `--reporter=blob` + `--grep`) | ✅ 통과, blob-report 생성 |
+| `--shard` + 0 테스트 | ✅ **exit 0** — 판정을 `total`+gate 로만 하는 설계가 옳음을 확인 |
+
+### 여기서 발견해 수정한 결함
+
+**Playwright 는 spec 파일 단위로 분할한다.** 5 tests in 1 file 을 `--shard=2/2` 로 나누니
+shard 1 이 5개, shard 2 가 **0개**였다. 테스트 수만으로 shard 를 계산하면 파일 수를 넘는
+shard 가 빈 채로 돌며 job 오버헤드만 태운다 — 비용 절감이 목적인 릴리스에서 정반대 효과다.
+개수 측정이 `Total` 라인의 파일 수(M)도 함께 읽어 shard 상한으로 쓰도록 고쳤다
+(밀도 3 · 10 tests · 2 files → 계산상 4 shard, 파일 수로 조여 2 shard).
 
 ## 미검증 항목 (환경 제약)
 
